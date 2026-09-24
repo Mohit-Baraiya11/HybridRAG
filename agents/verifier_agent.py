@@ -6,7 +6,7 @@ import os
 
 load_dotenv()
 
-llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0)
 
 class VerificationResult(BaseModel):
     decision: Literal["approve", "re_evaluate"]

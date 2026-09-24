@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 tavily = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
-llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0)
 
 def extract_web_query(user_query):
     result = llm.invoke(f"""Your job is to extract what needs to be searched on the web.

@@ -12,7 +12,7 @@ load_dotenv()
 
 pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
 supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
-llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0)
 
 graph = nx.Graph()
 

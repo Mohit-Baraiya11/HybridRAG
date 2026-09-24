@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-rewrite_llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+rewrite_llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0)
 
 REWRITE_PROMPT = """You rewrite follow-up messages into standalone questions using conversation history.
 

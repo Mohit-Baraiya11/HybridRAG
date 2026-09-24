@@ -16,7 +16,7 @@ from eval.test_dataset import hybrid_rag_test_cases
 PDF_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "Mohit_Baraiya_Resume.pdf")
 
 
-llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0)
 pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
 
 class PineconeEmbeddings(Embeddings):
@@ -109,7 +109,7 @@ def run_retrieval_eval(user_id="eval", session_id="eval-session"):
     # New way to wrap LLM in ragas 0.2
     from ragas.llms import LangchainLLMWrapper
     from langchain_groq import ChatGroq
-    ragas_llm = LangchainLLMWrapper(ChatGroq(model="llama-3.3-70b-versatile", temperature=0))
+    ragas_llm = LangchainLLMWrapper(ChatGroq(model="openai/gpt-oss-120b", temperature=0))
     ragas_embeddings = (
         get_ragas_embeddings()
     )
