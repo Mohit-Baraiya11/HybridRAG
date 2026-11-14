@@ -1,1746 +1,455 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GraphAgenticRAG</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Source+Sans+3:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
-
-    :root {
-      --bg: #141416;
-      --surface: #1C1C1F;
-      --surface-elevated: #242428;
-      --border: #2E2E33;
-      --border-subtle: #27272B;
-      --text-primary: #ECECED;
-      --text-secondary: #A0A0A8;
-      --text-muted: #636369;
-      --accent: #E2A84B;
-      --accent-hover: #EBB960;
-      --accent-soft: rgba(226, 168, 75, 0.12);
-      --accent-glow: rgba(226, 168, 75, 0.06);
-      --success: #5CB85C;
-      --error: #E05252;
-      --user-bubble: #2C6E49;
-      --user-bubble-text: #E8F5E9;
-      --radius-sm: 8px;
-      --radius-md: 14px;
-      --radius-lg: 18px;
-      --radius-pill: 999px;
-      --font-display: 'DM Sans', sans-serif;
-      --font-body: 'Source Sans 3', 'Source Sans Pro', sans-serif;
-      --font-mono: 'IBM Plex Mono', monospace;
-      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
-      --shadow-elevated: 0 12px 40px rgba(0, 0, 0, 0.45);
-      --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-      --transition-smooth: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    html,
-    body {
-      height: 100%;
-      overflow: hidden;
-    }
-
-    body {
-      font-family: var(--font-body);
-      background: var(--bg);
-      color: var(--text-primary);
-      font-size: 14px;
-      line-height: 1.6;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
-
-    button,
-    input,
-    textarea {
-      font-family: inherit;
-    }
-
-    ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: var(--border);
-      border-radius: 6px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: var(--text-muted);
-    }
-
-    :focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
-      border-radius: var(--radius-sm);
-    }
-
-    .brand {
-      font-family: var(--font-display);
-      font-weight: 700;
-      letter-spacing: -0.02em;
-    }
-
-    .brand .accent {
-      color: var(--accent);
-    }
-
-    .node-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-soft);
-      display: inline-block;
-    }
-
-    /* ── Auth Screen ── */
-    #auth-screen {
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      overflow: hidden;
-      background:
-        radial-gradient(ellipse 60% 50% at 50% 0%, rgba(226, 168, 75, 0.04), transparent),
-        var(--bg);
-    }
-
-    #auth-screen::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background-image:
-        radial-gradient(circle at 20% 30%, rgba(226, 168, 75, 0.06), transparent 50%),
-        radial-gradient(circle at 80% 70%, rgba(92, 184, 92, 0.03), transparent 45%);
-      pointer-events: none;
-    }
-
-    .auth-card {
-      position: relative;
-      width: 400px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 40px 36px 36px;
-      box-shadow: var(--shadow-elevated);
-    }
-
-    .auth-card::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 20%;
-      right: 20%;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--accent-soft), transparent);
-    }
-
-    .auth-brand {
-      font-size: 20px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 8px;
-    }
-
-    .auth-card p.subtitle {
-      font-size: 14px;
-      color: var(--text-secondary);
-      margin-bottom: 30px;
-      line-height: 1.5;
-    }
-
-    .tab-row {
-      display: flex;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 26px;
-    }
-
-    .tab-btn {
-      flex: 1;
-      padding: 11px;
-      font-size: 13.5px;
-      font-weight: 600;
-      color: var(--text-muted);
-      background: none;
-      border: none;
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-      margin-bottom: -1px;
-      transition: color var(--transition-fast), border-color var(--transition-fast);
-      font-family: var(--font-display);
-      letter-spacing: -0.01em;
-    }
-
-    .tab-btn:hover {
-      color: var(--text-secondary);
-    }
-
-    .tab-btn.active {
-      color: var(--text-primary);
-      border-bottom-color: var(--accent);
-    }
-
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 7px;
-      margin-bottom: 18px;
-    }
-
-    .field label {
-      font-size: 11.5px;
-      font-weight: 600;
-      color: var(--text-secondary);
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      font-family: var(--font-display);
-    }
-
-    .field input {
-      height: 44px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 0 14px;
-      color: var(--text-primary);
-      font-size: 14px;
-      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-    }
-
-    .field input:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-soft);
-      outline: none;
-    }
-
-    .field input::placeholder {
-      color: var(--text-muted);
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      height: 42px;
-      padding: 0 18px;
-      border-radius: var(--radius-sm);
-      border: 1px solid transparent;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      font-family: var(--font-display);
-      letter-spacing: -0.01em;
-      transition: background var(--transition-fast), border-color var(--transition-fast), transform 0.1s ease, box-shadow var(--transition-fast);
-    }
-
-    .btn:active {
-      transform: scale(0.97);
-    }
-
-    .btn-primary {
-      background: var(--accent);
-      color: #1A1A1C;
-      width: 100%;
-      margin-top: 8px;
-    }
-
-    .btn-primary:hover {
-      background: var(--accent-hover);
-      box-shadow: 0 2px 12px rgba(226, 168, 75, 0.2);
-    }
-
-    .btn-primary:disabled {
-      background: var(--surface-elevated);
-      color: var(--text-muted);
-      cursor: not-allowed;
-      box-shadow: none;
-    }
-
-    .btn-ghost {
-      background: transparent;
-      border-color: var(--border);
-      color: var(--text-primary);
-    }
-
-    .btn-ghost:hover {
-      background: var(--surface-elevated);
-      border-color: var(--text-muted);
-    }
-
-    .auth-msg {
-      font-size: 13px;
-      margin-top: 16px;
-      display: none;
-      padding: 10px 14px;
-      border-radius: var(--radius-sm);
-      line-height: 1.4;
-    }
-
-    .auth-msg.error {
-      color: var(--error);
-      background: rgba(224, 82, 82, 0.08);
-      border: 1px solid rgba(224, 82, 82, 0.15);
-    }
-
-    .auth-msg.success {
-      color: var(--success);
-      background: rgba(92, 184, 92, 0.08);
-      border: 1px solid rgba(92, 184, 92, 0.15);
-    }
-
-    /* ── App Layout ── */
-    #app {
-      display: none;
-      height: 100vh;
-      grid-template-columns: 260px 1fr;
-      overflow: hidden;
-    }
-
-    #app.active {
-      display: grid;
-    }
-
-    /* ── Sidebar ── */
-    .sidebar {
-      background: var(--surface);
-      border-right: 1px solid var(--border-subtle);
-      display: flex;
-      flex-direction: column;
-      padding: 18px 14px;
-    }
-
-    .sidebar-brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 16px;
-      padding: 2px 6px 20px;
-    }
-
-    .new-chat-btn {
-      margin-bottom: 16px;
-    }
-
-    .new-chat-btn svg {
-      flex-shrink: 0;
-    }
-
-    .sessions-list {
-      flex: 1;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      padding-right: 2px;
-    }
-
-    .session-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 12px;
-      border-radius: var(--radius-sm);
-      cursor: pointer;
-      color: var(--text-secondary);
-      font-size: 13.5px;
-      transition: background var(--transition-fast), color var(--transition-fast);
-      position: relative;
-    }
-
-    .session-item:hover {
-      background: var(--surface-elevated);
-      color: var(--text-primary);
-    }
-
-    .session-item.active {
-      background: var(--accent-soft);
-      color: var(--text-primary);
-    }
-
-    .session-item.active::before {
-      content: "";
-      position: absolute;
-      left: 0;
-      top: 6px;
-      bottom: 6px;
-      width: 3px;
-      border-radius: 0 3px 3px 0;
-      background: var(--accent);
-    }
-
-    .session-item svg {
-      flex-shrink: 0;
-      opacity: 0.6;
-    }
-
-    .session-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .session-title {
-      font-size: 13.5px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      font-weight: 500;
-    }
-
-    .session-date {
-      font-size: 11px;
-      color: var(--text-muted);
-      margin-top: 2px;
-    }
-
-    .delete-btn {
-      opacity: 0;
-      background: none;
-      border: none;
-      cursor: pointer;
-      color: var(--text-muted);
-      padding: 4px;
-      display: flex;
-      align-items: center;
-      transition: color var(--transition-fast), opacity var(--transition-fast);
-      flex-shrink: 0;
-    }
-
-    .session-item:hover .delete-btn {
-      opacity: 1;
-    }
-
-    .delete-btn:hover {
-      color: var(--error);
-    }
-
-    .sidebar-footer {
-      border-top: 1px solid var(--border-subtle);
-      padding-top: 14px;
-      margin-top: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .user-chip {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      overflow: hidden;
-    }
-
-    .user-avatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, var(--accent), #C48A30);
-      color: #1A1A1C;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      font-size: 13px;
-      flex-shrink: 0;
-      font-family: var(--font-display);
-    }
-
-    .user-email {
-      font-size: 12.5px;
-      color: var(--text-secondary);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .icon-btn {
-      width: 34px;
-      height: 34px;
-      border-radius: var(--radius-sm);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: transparent;
-      border: none;
-      color: var(--text-secondary);
-      cursor: pointer;
-      flex-shrink: 0;
-      transition: background var(--transition-fast), color var(--transition-fast);
-    }
-
-    .icon-btn:hover {
-      background: var(--surface-elevated);
-      color: var(--text-primary);
-    }
-
-    .mobile-menu-btn {
-      display: none;
-    }
-
-    .mobile-topbar {
-      display: none;
-      align-items: center;
-      gap: 10px;
-      padding: 14px 16px;
-      border-bottom: 1px solid var(--border-subtle);
-      background: var(--bg);
-      flex-shrink: 0;
-    }
-
-    .sidebar-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.55);
-      z-index: 49;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity var(--transition-smooth);
-    }
-
-    .skeleton-row {
-      display: flex;
-      align-items: center;
-      padding: 10px 12px;
-      gap: 10px;
-    }
-
-    .skeleton-box {
-      background: var(--surface-elevated);
-      border-radius: 4px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .skeleton-box::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.04), transparent);
-      animation: shimmer 1.5s ease infinite;
-    }
-
-    @keyframes shimmer {
-      0% {
-        transform: translateX(-100%);
-      }
-
-      100% {
-        transform: translateX(100%);
-      }
-    }
-
-    /* ── Main column ── */
-    .main {
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-      height: 100vh;
-      min-height: 0;
-      overflow: hidden;
-      background: var(--bg);
-    }
-
-    .topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 32px;
-      border-bottom: 1px solid var(--border-subtle);
-      background: var(--bg);
-      flex-shrink: 0;
-    }
-
-    .topbar-title {
-      font-family: var(--font-display);
-      font-size: 16px;
-      font-weight: 600;
-      letter-spacing: -0.01em;
-    }
-
-    .doc-chips {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      padding: 0 32px;
-      margin-top: 12px;
-    }
-
-    .doc-chip {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-pill);
-      padding: 5px 12px 5px 8px;
-      font-size: 12px;
-      color: var(--text-secondary);
-      font-family: var(--font-mono);
-    }
-
-    .doc-chip svg {
-      color: var(--accent);
-      flex-shrink: 0;
-    }
-
-    .messages {
-      flex: 1;
-      min-height: 0;
-      overflow-y: auto;
-      padding: 28px 32px;
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
-    }
-
-    .msg-row {
-      display: flex;
-      gap: 12px;
-      max-width: 720px;
-      animation: msgFadeIn 0.3s ease both;
-    }
-
-    @keyframes msgFadeIn {
-      from {
-        opacity: 0;
-        transform: translateY(8px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .msg-row.user {
-      align-self: flex-end;
-      flex-direction: row-reverse;
-    }
-
-    .msg-avatar {
-      width: 30px;
-      height: 30px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 11px;
-      font-weight: 700;
-      margin-top: 2px;
-      font-family: var(--font-display);
-    }
-
-    .msg-row.ai .msg-avatar {
-      background: var(--accent-soft);
-      color: var(--accent);
-    }
-
-    .msg-row.user .msg-avatar {
-      background: rgba(44, 110, 73, 0.25);
-      color: #8BC99B;
-    }
-
-    .msg-bubble {
-      padding: 14px 18px;
-      border-radius: var(--radius-md);
-      font-size: 14.5px;
-      line-height: 1.6;
-    }
-
-    .msg-row.ai .msg-bubble {
-      background: var(--surface);
-      border: 1px solid var(--border-subtle);
-      border-top-left-radius: 4px;
-    }
-
-    .msg-row.user .msg-bubble {
-      background: var(--user-bubble);
-      color: var(--user-bubble-text);
-      border-top-right-radius: 4px;
-      font-weight: 500;
-    }
-
-    .msg-bubble strong {
-      font-weight: 600;
-    }
-
-    .empty-state,
-    .no-session,
-    .loading-state {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-muted);
-      gap: 10px;
-      text-align: center;
-      padding: 40px;
-    }
-
-    .empty-state h2,
-    .no-session h2 {
-      font-family: var(--font-display);
-      color: var(--text-secondary);
-      font-size: 18px;
-      font-weight: 600;
-      letter-spacing: -0.02em;
-    }
-
-    .empty-state p,
-    .no-session p {
-      font-size: 14px;
-      max-width: 360px;
-      line-height: 1.6;
-      color: var(--text-muted);
-    }
-
-    .spinner {
-      width: 22px;
-      height: 22px;
-      border: 2px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    .typing-indicator {
-      display: flex;
-      gap: 5px;
-      padding: 6px 2px;
-      align-items: center;
-    }
-
-    .typing-dot {
-      width: 5px;
-      height: 5px;
-      background: var(--text-muted);
-      border-radius: 50%;
-      animation: typing 1.4s ease infinite;
-    }
-
-    .typing-dot:nth-child(2) {
-      animation-delay: 0.2s;
-    }
-
-    .typing-dot:nth-child(3) {
-      animation-delay: 0.4s;
-    }
-
-    @keyframes typing {
-
-      0%,
-      60%,
-      100% {
-        opacity: 0.25;
-        transform: translateY(0);
-      }
-
-      30% {
-        opacity: 1;
-        transform: translateY(-3px);
-      }
-    }
-
-    .composer {
-      padding: 16px 32px 24px;
-      border-top: 1px solid var(--border-subtle);
-      background: var(--bg);
-      flex-shrink: 0;
-    }
-
-    .composer-inner {
-      display: flex;
-      align-items: flex-end;
-      gap: 10px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 8px 10px 8px 18px;
-      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-    }
-
-    .composer-inner:focus-within {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-soft);
-    }
-
-    .composer-inner textarea {
-      flex: 1;
-      background: none;
-      border: none;
-      color: var(--text-primary);
-      font-size: 14.5px;
-      resize: none;
-      max-height: 160px;
-      padding: 10px 0;
-      line-height: 1.5;
-      font-family: var(--font-body);
-    }
-
-    .composer-inner textarea:focus {
-      outline: none;
-    }
-
-    .composer-inner textarea::placeholder {
-      color: var(--text-muted);
-    }
-
-    .send-btn {
-      width: 38px;
-      height: 38px;
-      border-radius: var(--radius-sm);
-      background: var(--accent);
-      color: #1A1A1C;
-      border: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      flex-shrink: 0;
-      transition: background var(--transition-fast), box-shadow var(--transition-fast), transform 0.1s ease;
-    }
-
-    .send-btn:hover {
-      background: var(--accent-hover);
-      box-shadow: 0 2px 10px rgba(226, 168, 75, 0.25);
-    }
-
-    .send-btn:active {
-      transform: scale(0.94);
-    }
-
-    .send-btn:disabled {
-      background: var(--surface-elevated);
-      color: var(--text-muted);
-      cursor: not-allowed;
-      box-shadow: none;
-    }
-
-    .composer-hint {
-      font-size: 11.5px;
-      color: var(--text-muted);
-      text-align: center;
-      margin-top: 10px;
-      letter-spacing: 0.01em;
-    }
-
-    /* ── Upload modal ── */
-    .upload-panel {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(10, 10, 12, 0.80);
-      z-index: 100;
-      align-items: center;
-      justify-content: center;
-      backdrop-filter: blur(6px);
-      animation: overlayIn 0.2s ease;
-    }
-
-    @keyframes overlayIn {
-      from {
-        opacity: 0;
-      }
-
-      to {
-        opacity: 1;
-      }
-    }
-
-    .upload-panel.open {
-      display: flex;
-    }
-
-    .upload-modal {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      width: 440px;
-      padding: 32px;
-      position: relative;
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-elevated);
-      animation: modalIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    @keyframes modalIn {
-      from {
-        opacity: 0;
-        transform: scale(0.96) translateY(8px);
-      }
-
-      to {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-      }
-    }
-
-    .upload-modal h2 {
-      font-family: var(--font-display);
-      font-size: 17px;
-      font-weight: 600;
-      margin-bottom: 6px;
-      letter-spacing: -0.01em;
-    }
-
-    .upload-modal p {
-      font-size: 13.5px;
-      color: var(--text-secondary);
-      margin-bottom: 24px;
-      line-height: 1.5;
-    }
-
-    .drop-zone {
-      border: 1.5px dashed var(--border);
-      border-radius: var(--radius-md);
-      padding: 44px 20px;
-      text-align: center;
-      cursor: pointer;
-      transition: border-color var(--transition-fast), background var(--transition-fast);
-      color: var(--text-muted);
-    }
-
-    .drop-zone:hover,
-    .drop-zone.dragover {
-      border-color: var(--accent);
-      background: var(--accent-glow);
-      color: var(--accent);
-    }
-
-    .drop-zone svg {
-      margin-bottom: 12px;
-    }
-
-    .drop-zone p {
-      font-size: 13.5px;
-      color: inherit;
-      margin-bottom: 4px;
-      font-weight: 500;
-    }
-
-    .drop-zone span {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-
-    #file-input {
-      display: none;
-    }
-
-    .upload-list {
-      margin-top: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .upload-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 14px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-    }
-
-    .upload-item-name {
-      flex: 1;
-      font-size: 13px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      font-weight: 500;
-    }
-
-    .upload-item-status {
-      font-size: 11px;
-      color: var(--text-muted);
-      flex-shrink: 0;
-      font-weight: 500;
-    }
-
-    .upload-item-status.done {
-      color: var(--success);
-    }
-
-    .upload-item-status.error {
-      color: var(--error);
-    }
-
-    .modal-actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 22px;
-      justify-content: flex-end;
-    }
-
-    .close-modal {
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      background: none;
-      border: none;
-      cursor: pointer;
-      color: var(--text-muted);
-      padding: 6px;
-      display: flex;
-      align-items: center;
-      border-radius: var(--radius-sm);
-      transition: background var(--transition-fast), color var(--transition-fast);
-    }
-
-    .close-modal:hover {
-      color: var(--text-primary);
-      background: var(--surface-elevated);
-    }
-
-    /* ── Toast ── */
-    .toast {
-      position: fixed;
-      bottom: 28px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--surface-elevated);
-      border: 1px solid var(--border);
-      color: var(--text-primary);
-      padding: 12px 20px;
-      border-radius: var(--radius-sm);
-      font-size: 13.5px;
-      font-weight: 500;
-      box-shadow: var(--shadow-elevated);
-      z-index: 200;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.25s ease, transform 0.25s ease;
-    }
-
-    .toast.show {
-      opacity: 1;
-      transform: translateX(-50%) translateY(-6px);
-    }
-
-    .toast.error {
-      border-color: var(--error);
-      color: var(--error);
-    }
-
-    /* ── Responsive (tablet & mobile) ── */
-    @media (max-width: 860px) {
-      #app.active {
-        grid-template-columns: 1fr;
-      }
-
-      .mobile-menu-btn {
-        display: flex;
-      }
-
-      .mobile-topbar {
-        display: flex;
-      }
-
-      .sidebar {
-        position: fixed;
-        top: 0;
-        left: 0;
-        bottom: 0;
-        z-index: 50;
-        width: min(280px, 82vw);
-        transform: translateX(-100%);
-        transition: transform var(--transition-smooth);
-        box-shadow: var(--shadow-elevated);
-      }
-
-      .sidebar.open {
-        transform: translateX(0);
-      }
-
-      .sidebar-overlay.show {
-        display: block;
-        opacity: 1;
-        pointer-events: auto;
-      }
-
-      .topbar {
-        padding: 14px 16px;
-      }
-
-      .doc-chips {
-        padding: 0 16px;
-        margin-top: 10px;
-      }
-
-      .messages {
-        padding: 18px 16px;
-        gap: 18px;
-      }
-
-      .msg-row {
-        max-width: 92%;
-      }
-
-      .composer {
-        padding: 12px 16px 16px;
-      }
-
-      .composer-inner {
-        padding: 6px 6px 6px 14px;
-      }
-
-      .auth-card {
-        width: 92vw;
-        max-width: 400px;
-        padding: 32px 24px 28px;
-      }
-    }
-
-    @media (max-width: 460px) {
-      .msg-row {
-        max-width: 96%;
-      }
-
-      .msg-bubble {
-        padding: 12px 14px;
-        font-size: 14px;
-      }
-
-      .topbar-title {
-        font-size: 14.5px;
-      }
-
-      .btn-ghost span,
-      .upload-btn-label {
-        display: none;
-      }
-
-      .upload-modal {
-        width: 92vw;
-        padding: 24px 20px;
-      }
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HybridRAG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--ink:#17232B;--muted:#5E6E78;--faint:#8C9AA3;--paper:#F4F6F5;--card:#fff;--line:#DDE3E1;--side:#0F2C30;--side2:#17393E;--sidetx:#C3D6D5;--teal:#0E6B6B;--teal-d:#0A5555;--mark:#F5D547;--err:#B3361F;--ok:#1F7A4D;--serif:'Newsreader',Georgia,serif}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font:15px/1.5 'Instrument Sans',system-ui,sans-serif;background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased}
+button,input,textarea{font:inherit;color:inherit}button{cursor:pointer}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:6px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-weight:500}
+.btn:hover{border-color:var(--faint)}
+.btn.pri{background:var(--teal);border-color:var(--teal);color:#fff}.btn.pri:hover{background:var(--teal-d)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.icon{width:34px;height:34px;border:0;background:none;border-radius:8px;display:grid;place-items:center;color:inherit}
+.icon:hover{background:rgba(127,150,150,.18)}
+/* auth */
+#auth{height:100%;display:grid;grid-template-columns:1.05fr 1fr}
+.hero{background:var(--side);color:#fff;padding:56px;display:flex;flex-direction:column;justify-content:space-between}
+.brand{font-family:var(--serif);font-weight:600;font-size:22px;letter-spacing:-.01em}
+.hero h1{font-family:var(--serif);font-weight:500;font-size:44px;line-height:1.1;max-width:14ch;letter-spacing:-.02em}
+.hero p{color:var(--sidetx);max-width:44ch;margin-top:18px;font-size:16px}
+.hero mark{background:var(--mark);color:var(--side);padding:0 4px;border-radius:3px}
+.formwrap{display:grid;place-items:center;padding:32px}
+.form{width:100%;max-width:360px}
+.form h2{font-family:var(--serif);font-weight:600;font-size:28px;margin-bottom:6px}
+.form .sub{color:var(--muted);margin-bottom:22px}
+.tabs{display:flex;gap:20px;border-bottom:1px solid var(--line);margin-bottom:22px}
+.tab{background:none;border:0;padding:8px 0;color:var(--muted);font-weight:500;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.on{color:var(--ink);border-color:var(--teal)}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:13px;font-weight:500;margin-bottom:6px}
+.field input{width:100%;height:44px;padding:0 14px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+.field input:focus{outline:2px solid var(--teal);outline-offset:0;border-color:var(--teal)}
+.form .btn.pri{width:100%;height:44px;margin-top:4px}
+.msg{display:none;margin-top:16px;padding:10px 14px;border-radius:10px;font-size:14px}
+.msg.error{display:block;color:var(--err);background:#FBEAE6}.msg.success{display:block;color:var(--ok);background:#E5F4EC}
+/* app */
+#app{display:none;height:100%;grid-template-columns:272px 1fr}#app.on{display:grid}
+.side{background:var(--side);color:var(--sidetx);display:flex;flex-direction:column;padding:18px 14px;min-height:0}
+.side .brand{color:#fff;padding:2px 8px 18px}
+.side .btn.pri{background:var(--mark);border-color:var(--mark);color:var(--side);font-weight:600;margin-bottom:14px}
+.side .btn.pri:hover{background:#FFE46B}
+.list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.note{padding:14px 10px;font-size:13px;color:var(--faint)}
+.s{position:relative;display:flex;align-items:center;gap:8px;padding:9px 10px 9px 14px;border-radius:8px;cursor:pointer}
+.s:hover{background:var(--side2)}
+.s.on{background:var(--side2);color:#fff}
+.s.on::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:2px;background:var(--mark)}
+.s .t{flex:1;min-width:0}.s b{display:block;font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.s small{font-size:12px;color:var(--faint)}
+.del{opacity:0;width:28px;height:28px;color:var(--sidetx)}.s:hover .del,.del:focus-visible{opacity:1}.del:hover{color:#FF9B88}
+.foot{display:flex;align-items:center;gap:10px;border-top:1px solid var(--side2);padding-top:12px;margin-top:8px}
+.av{width:30px;height:30px;border-radius:50%;background:var(--mark);color:var(--side);display:grid;place-items:center;font-weight:600;font-size:13px;flex-shrink:0}
+.foot span{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.main{display:flex;flex-direction:column;min-width:0;min-height:0;height:100%}
+.top{display:flex;align-items:center;gap:10px;padding:12px 24px;border-bottom:1px solid var(--line);background:var(--card);flex-shrink:0}
+.top h2{flex:1;min-width:0;font-family:var(--serif);font-weight:600;font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.menu{display:none}
+.chips{display:flex;gap:8px;flex-wrap:wrap;padding:10px 24px 0;max-width:808px;width:100%;margin:0 auto}
+.chip{display:flex;align-items:center;gap:6px;padding:4px 12px;border:1px solid var(--line);background:var(--card);border-radius:999px;font-size:13px;color:var(--muted)}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--teal)}
+.msgs{flex:1;min-height:0;overflow-y:auto;padding:26px 0}
+.col{max-width:808px;margin:0 auto;padding:0 24px;display:flex;flex-direction:column;gap:22px}
+.u{align-self:flex-end;max-width:80%;background:var(--teal);color:#fff;padding:10px 16px;border-radius:16px 16px 4px 16px;white-space:pre-wrap;overflow-wrap:anywhere}
+.a{font-family:var(--serif);font-size:17.5px;line-height:1.65;max-width:68ch;white-space:pre-wrap;overflow-wrap:anywhere}
+.a.err{color:var(--err);font-family:inherit;font-size:15px}
+.a code{font:13.5px ui-monospace,Menlo,monospace;background:#E7ECEA;padding:1px 5px;border-radius:4px}
+.dots{display:flex;gap:5px;padding:8px 0}.dots i{width:6px;height:6px;border-radius:50%;background:var(--faint);animation:b 1.2s infinite}
+.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
+@keyframes b{0%,60%,100%{opacity:.3}30%{opacity:1}}
+.empty{margin:8vh auto 0;max-width:46ch;text-align:left}
+.empty h3{font-family:var(--serif);font-weight:500;font-size:30px;line-height:1.15;margin-bottom:12px;letter-spacing:-.01em}
+.empty p{color:var(--muted);margin-bottom:20px}
+.none{flex:1;display:grid;place-items:center;padding:24px}
+.composer{padding:12px 24px 18px;flex-shrink:0}
+.box{max-width:760px;margin:0 auto;display:flex;align-items:flex-end;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:6px 6px 6px 16px}
+.box:focus-within{border-color:var(--teal);box-shadow:0 0 0 3px rgba(14,107,107,.14)}
+.box textarea{flex:1;border:0;background:none;resize:none;max-height:160px;padding:9px 0;line-height:1.5}.box textarea:focus{outline:none}
+.send{width:40px;height:40px;border:0;border-radius:10px;background:var(--teal);color:#fff;display:grid;place-items:center}
+.send:hover{background:var(--teal-d)}.send:disabled{background:var(--line);color:var(--faint);cursor:not-allowed}
+.hint{max-width:760px;margin:8px auto 0;font-size:12.5px;color:var(--faint);text-align:center}
+/* modal + toast */
+.modal{display:none;position:fixed;inset:0;background:rgba(15,44,48,.55);z-index:50;place-items:center;padding:16px}
+.modal.open{display:grid}
+.dlg{background:var(--card);border-radius:16px;width:100%;max-width:460px;padding:28px;position:relative}
+.dlg h2{font-family:var(--serif);font-weight:600;font-size:24px;margin-bottom:4px}
+.dlg>p{color:var(--muted);margin-bottom:18px}
+.dlg .x{position:absolute;top:14px;right:14px}
+.drop{border:1.5px dashed var(--faint);border-radius:12px;padding:34px 16px;text-align:center;cursor:pointer;color:var(--muted)}
+.drop:hover,.drop.over{border-color:var(--teal);background:#EAF3F2;color:var(--teal)}
+.drop b{display:block;color:var(--ink);font-weight:500}
+.ups{margin-top:14px;display:flex;flex-direction:column;gap:8px}
+.up{display:flex;gap:10px;justify-content:space-between;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px}
+.up span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.up span:last-child{color:var(--muted);flex-shrink:0;font-size:13px}
+.up .ok{color:var(--ok)}.up .bad{color:var(--err)}
+.acts{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+.toast{position:fixed;bottom:24px;left:50%;transform:translate(-50%,8px);background:var(--ink);color:#fff;padding:11px 18px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:.2s;z-index:80;max-width:90vw}
+.toast.show{opacity:1;transform:translate(-50%,0)}.toast.error{background:var(--err)}
+.side .btn:not(.pri){background:transparent;border-color:var(--side2);color:var(--sidetx);margin-bottom:10px}.side .btn:not(.pri):hover{background:var(--side2);color:#fff}
+.sel{height:34px;border:1px solid var(--line);border-radius:8px;padding:0 8px;background:var(--card)}
+.dlg.wide{max-width:560px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}
+.stat{border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.stat b{display:block;font-family:var(--serif);font-size:26px;font-weight:600;line-height:1.1}
+.stat small{color:var(--muted);font-size:12.5px}
+.bars{display:flex;align-items:flex-end;gap:4px;height:96px;margin-top:6px}
+.bars .d{flex:1;height:100%;display:flex;align-items:flex-end}
+.bars .d i{display:block;width:100%;background:#BFD9D8;border-radius:3px 3px 0 0;position:relative}
+.bars .d u{position:absolute;left:0;right:0;bottom:0;background:var(--teal);border-radius:3px 3px 0 0}
+.cap{display:block;color:var(--muted);font-size:12.5px;margin:6px 0 12px}
+.cmp{margin:0 0 12px;padding:10px 12px;background:var(--paper);border-radius:10px;font-size:14px}
+.rec{max-height:150px;overflow-y:auto;font-size:13.5px;border-top:1px solid var(--line)}
+.rec div{display:flex;justify-content:space-between;padding:6px 2px;border-bottom:1px solid var(--line)}
+.scrim{display:none}
+@media(max-width:860px){
+#auth{grid-template-columns:1fr}.hero{display:none}
+#app.on{grid-template-columns:1fr}
+.menu{display:grid}
+.side{position:fixed;inset:0 auto 0 0;width:min(290px,84vw);z-index:40;transform:translateX(-100%);transition:transform .2s}
+.side.open{transform:none}.scrim.show{display:block;position:fixed;inset:0;background:rgba(15,44,48,.5);z-index:39}
+.top,.composer,.chips,.col{padding-left:14px;padding-right:14px}.u{max-width:90%}
+}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
 </head>
-
 <body>
 
-  <!-- Auth Screen -->
-  <div id="auth-screen">
-    <div class="auth-card">
-      <div class="auth-brand brand"><span class="node-dot"></span>Graph<span class="accent">Agentic</span>RAG</div>
-      <p class="subtitle" id="auth-subtitle">Sign in to continue to your sessions</p>
-
-      <div class="tab-row">
-        <button class="tab-btn active" onclick="switchTab('login')">Sign in</button>
-        <button class="tab-btn" onclick="switchTab('register')">Create account</button>
-      </div>
-
-      <div id="login-form">
-        <div class="field">
-          <label>Email</label>
-          <input type="email" id="login-email" placeholder="you@example.com"
-            onkeydown="if(event.key==='Enter')handleLogin()" />
-        </div>
-        <div class="field">
-          <label>Password</label>
-          <input type="password" id="login-password" placeholder="••••••••"
-            onkeydown="if(event.key==='Enter')handleLogin()" />
-        </div>
-        <button class="btn btn-primary" onclick="handleLogin()">Sign in</button>
-      </div>
-
-      <div id="register-form" style="display:none">
-        <div class="field">
-          <label>Email</label>
-          <input type="email" id="reg-email" placeholder="you@example.com"
-            onkeydown="if(event.key==='Enter')handleRegister()" />
-        </div>
-        <div class="field">
-          <label>Password</label>
-          <input type="password" id="reg-password" placeholder="Min 6 characters"
-            onkeydown="if(event.key==='Enter')handleRegister()" />
-        </div>
-        <button class="btn btn-primary" onclick="handleRegister()">Create account</button>
-      </div>
-
-      <div class="auth-msg" id="auth-msg"></div>
+<div id="auth">
+  <div class="hero">
+    <div class="brand">HybridRAG</div>
+    <div>
+      <h1>Ask your PDFs <mark>anything</mark>.</h1>
+      <p>Each answer is built from the passages that semantic and keyword search found together in your documents, then checked against them before you see it.</p>
     </div>
+    <div style="font-size:13px;color:var(--faint)">Dense + BM25 retrieval · reranking · answer verification</div>
   </div>
+  <div class="formwrap"><div class="form">
+    <h2 id="auth-title">Sign in</h2>
+    <p class="sub" id="auth-sub">Pick up where you left off.</p>
+    <div class="tabs" role="tablist">
+      <button class="tab on" id="tab-login" role="tab" onclick="switchTab('login')">Sign in</button>
+      <button class="tab" id="tab-register" role="tab" onclick="switchTab('register')">Create account</button>
+    </div>
+    <div id="login-form">
+      <div class="field"><label for="login-email">Email</label><input type="email" id="login-email" autocomplete="email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')handleLogin()"></div>
+      <div class="field"><label for="login-password">Password</label><input type="password" id="login-password" autocomplete="current-password" onkeydown="if(event.key==='Enter')handleLogin()"></div>
+      <button class="btn pri" id="login-btn" onclick="handleLogin()">Sign in</button>
+    </div>
+    <div id="register-form" style="display:none">
+      <div class="field"><label for="reg-email">Email</label><input type="email" id="reg-email" autocomplete="email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')handleRegister()"></div>
+      <div class="field"><label for="reg-password">Password</label><input type="password" id="reg-password" autocomplete="new-password" placeholder="At least 6 characters" onkeydown="if(event.key==='Enter')handleRegister()"></div>
+      <button class="btn pri" id="reg-btn" onclick="handleRegister()">Create account</button>
+    </div>
+    <div class="msg" id="auth-msg" role="alert"></div>
+  </div></div>
+</div>
 
-  <!-- App -->
-  <div id="app">
-    <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-brand brand"><span class="node-dot"></span>Graph<span class="accent">Agentic</span>RAG</div>
-      <button class="btn btn-primary new-chat-btn" onclick="createNewSession()">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-        </svg>
-        New chat
-      </button>
-      <div class="sessions-list" id="sessions-list"></div>
-      <div class="sidebar-footer">
-        <div class="user-chip">
-          <div class="user-avatar" id="user-avatar">U</div>
-          <span class="user-email" id="user-email">loading…</span>
+<div id="app">
+  <div class="scrim" id="scrim" onclick="closeSide()"></div>
+  <aside class="side" id="side">
+    <div class="brand">HybridRAG</div>
+    <button class="btn pri" onclick="newChat()">+ New chat</button>
+    <div class="list" id="list" aria-label="Chats"></div>
+    <button class="btn" onclick="openStats()">Response times</button>
+    <div class="foot">
+      <div class="av" id="av">U</div><span id="email"></span>
+      <button class="icon" onclick="logout()" aria-label="Sign out" title="Sign out"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 14H3a1 1 0 01-1-1V3a1 1 0 011-1h3M11 11l3-3-3-3M14 8H6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="none" id="none"><div class="empty"><h3>Start a chat to get going.</h3><p>Create a new chat, upload a PDF, and ask a question about it.</p><button class="btn pri" onclick="newChat()">New chat</button></div></div>
+    <div id="chat" style="display:none;flex-direction:column;flex:1;min-height:0">
+      <div class="top">
+        <button class="icon menu" onclick="openSide()" aria-label="Open chats"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+        <h2 id="title">New chat</h2>
+        <button class="btn" onclick="openUpload()">Upload PDF</button>
+      </div>
+      <div class="chips" id="chips"></div>
+      <div class="msgs" id="msgs"><div class="col" id="col"></div></div>
+      <div class="composer">
+        <div class="box">
+          <textarea id="input" rows="1" placeholder="Ask about your documents" aria-label="Message" onkeydown="keydown(event)" oninput="grow(this)"></textarea>
+          <button class="send" id="send" onclick="send()" aria-label="Send"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8h11M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         </div>
-        <button class="icon-btn" onclick="handleLogout()" title="Sign out">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M6 14H3a1 1 0 01-1-1V3a1 1 0 011-1h3M11 11l3-3-3-3M14 8H6" stroke="currentColor" stroke-width="1.4"
-              stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-        </button>
-      </div>
-    </aside>
-
-    <main class="main">
-      <div class="mobile-topbar">
-        <button class="icon-btn mobile-menu-btn" onclick="toggleSidebar()" title="Menu">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </button>
-        <div class="brand" style="font-size:15px;"><span class="node-dot"></span>Graph<span
-            class="accent">Agentic</span>RAG</div>
-      </div>
-      <div class="no-session" id="no-session">
-        <div class="node-dot"
-          style="width:14px;height:14px;box-shadow:0 0 0 6px var(--accent-soft);margin-bottom:10px;"></div>
-        <h2>No chat selected</h2>
-        <p>Create a new chat or select one from the sidebar to get started.</p>
-      </div>
-
-      <div id="chat-view" style="display:none; flex-direction:column; flex:1; min-height:0; overflow:hidden;">
-        <div class="topbar">
-          <div class="topbar-title" id="chat-title">New chat</div>
-          <button class="btn btn-ghost" onclick="openUpload()">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M7 9V1m0 0L4 4m3-3l3 3M2 9v3a1 1 0 001 1h8a1 1 0 001-1V9" stroke="currentColor"
-                stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-            Upload PDF
-          </button>
-        </div>
-        <div class="doc-chips" id="pdf-badges"></div>
-        <div class="messages" id="messages-area">
-          <div class="empty-state" id="empty-state">
-            <div class="node-dot"
-              style="width:14px;height:14px;box-shadow:0 0 0 6px var(--accent-soft);margin-bottom:10px;"></div>
-            <h2>Ask anything, or attach a document</h2>
-            <p>GraphAgenticRAG routes your question across hybrid retrieval, graph traversal, and live web search — and
-              verifies its own answer before replying.</p>
-          </div>
-        </div>
-        <div class="composer">
-          <div class="composer-inner">
-            <textarea id="message-input" rows="1" placeholder="Ask anything…" onkeydown="handleKeydown(event)"
-              oninput="autoResize(this)"></textarea>
-            <button class="send-btn" onclick="sendMessage()" id="send-btn">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M2 8h11M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
-                  stroke-linejoin="round" />
-              </svg>
-            </button>
-          </div>
-          <div class="composer-hint">Press Enter to send · Shift+Enter for new line</div>
-        </div>
-      </div>
-    </main>
-  </div>
-
-  <!-- Upload Panel -->
-  <div class="upload-panel" id="upload-panel">
-    <div class="upload-modal">
-      <button class="close-modal" onclick="closeUpload()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-      </button>
-      <h2>Upload PDFs</h2>
-      <p>Upload documents for this chat session. Files are processed and deleted after indexing.</p>
-      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()"
-        ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-          <polyline points="14 2 14 8 20 8" />
-          <line x1="12" y1="18" x2="12" y2="12" />
-          <line x1="9" y1="15" x2="15" y2="15" />
-        </svg>
-        <p>Drop PDF files here</p>
-        <span>or click to browse</span>
-      </div>
-      <input type="file" id="file-input" accept=".pdf" multiple onchange="handleFileSelect(event)" />
-      <div class="upload-list" id="upload-list"></div>
-      <div class="modal-actions">
-        <button class="btn btn-ghost" onclick="closeUpload()">Close</button>
-        <button class="btn btn-primary" id="upload-confirm-btn" onclick="uploadFiles()" disabled
-          style="width:auto;margin-top:0;">Upload</button>
+        <div class="hint">Enter to send, Shift+Enter for a new line</div>
       </div>
     </div>
+  </main>
+</div>
+
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="m-title">
+  <div class="dlg">
+    <button class="icon x" onclick="closeUpload()" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    <h2 id="m-title">Upload PDFs</h2>
+    <p>Added to this chat only. Files are indexed in the background and deleted from the server afterwards.</p>
+    <div class="drop" id="drop" tabindex="0" onclick="fileInput.click()" onkeydown="if(event.key==='Enter'||event.key===' ')fileInput.click()" ondragover="dragOver(event)" ondragleave="dropEl.classList.remove('over')" ondrop="dropFiles(event)"><b>Drop PDF files here</b>or click to browse</div>
+    <input type="file" id="file" accept=".pdf,application/pdf" multiple hidden onchange="pick(event)">
+    <div class="ups" id="ups"></div>
+    <div class="acts"><button class="btn" onclick="closeUpload()">Close</button><button class="btn pri" id="go" onclick="upload()" disabled>Upload</button></div>
   </div>
+</div>
+<div class="modal" id="stats-modal" role="dialog" aria-modal="true" aria-labelledby="s-title">
+  <div class="dlg wide">
+    <button class="icon x" onclick="closeStats()" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    <h2 id="s-title">Response times</h2>
+    <p>How long the server took to find and write each answer, from your question to the reply.</p>
+    <label for="s-days" class="cap" style="display:inline">Show the last</label>
+    <select class="sel" id="s-days" onchange="loadStats()"><option value="7">7 days</option><option value="14" selected>14 days</option><option value="30">30 days</option></select>
+    <div id="s-body"></div>
+    <div class="acts"><button class="btn" onclick="closeStats()">Close</button></div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status"></div>
 
-  <div class="toast" id="toast"></div>
+<script>
+const SUPABASE_URL='https://swmvzrglidizhdbwrezq.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3bXZ6cmdsaWRpemhkYndyZXpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNDA4NjAsImV4cCI6MjA5NzYxNjg2MH0.hfuH6soQAyGSEDftSeIUdUM67KpYpAff_W1ta7eyqh0';
+const API_BASE='';   // same origin: FastAPI serves this page
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const $=id=>document.getElementById(id);
+const fileInput=$('file'),dropEl=$('drop');
+let user=null,cur=null,pending=[],pdfs={},cache={},shownFor=null,busy=false;
 
-  <script>
-    // ── Config ──
-    const SUPABASE_URL = 'https://swmvzrglidizhdbwrezq.supabase.co';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3bXZ6cmdsaWRpemhkYndyZXpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNDA4NjAsImV4cCI6MjA5NzYxNjg2MH0.hfuH6soQAyGSEDftSeIUdUM67KpYpAff_W1ta7eyqh0';
-    const API_BASE = 'https://graphagenticrag.onrender.com/'.replace(/\/+$/, '');
+/* ---------- helpers ---------- */
+const esc=s=>{const d=document.createElement('div');d.textContent=s??'';return d.innerHTML};
+const fmt=s=>esc(s).replace(/`([^`\n]+)`/g,'<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>');
+const when=iso=>{const d=new Date(iso),n=Date.now()-d;return n<864e5?d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):n<6048e5?d.toLocaleDateString([],{weekday:'short'}):d.toLocaleDateString([],{month:'short',day:'numeric'})};
+let tt;function toast(m,err){const t=$('toast');t.textContent=m;t.className='toast show'+(err?' error':'');clearTimeout(tt);tt=setTimeout(()=>t.className='toast',3500)}
+async function token(){return (await sb.auth.getSession()).data.session?.access_token}
+async function api(path,opts={}){
+  const t=await token();if(!t){showAuth();throw new Error('Not signed in')}
+  const h={Authorization:'Bearer '+t};if(opts.body&&typeof opts.body==='string')h['Content-Type']='application/json';
+  const r=await fetch(API_BASE+path,{...opts,headers:h});
+  if(r.status===401){await sb.auth.signOut();showAuth();authMsg('Your session expired. Sign in again.','error');throw new Error('Unauthorized')}
+  return r;
+}
+const grow=el=>{el.style.height='auto';el.style.height=Math.min(el.scrollHeight,160)+'px'};
+const keydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();send()}};
+const openSide=()=>{$('side').classList.add('open');$('scrim').classList.add('show')};
+const closeSide=()=>{$('side').classList.remove('open');$('scrim').classList.remove('show')};
 
-    const { createClient } = supabase;
-    const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+/* ---------- auth ---------- */
+async function init(){
+  const {data:{session}}=await sb.auth.getSession();
+  if(session){user=session.user;enter()}
+  sb.auth.onAuthStateChange((_e,s)=>{
+    if(s){user=s.user;enter()}else{shownFor=null;user=null;showAuth()}
+  });
+}
+function enter(){if(shownFor===user.id)return;shownFor=user.id;showApp()}
+function switchTab(t){
+  const login=t==='login';
+  $('tab-login').classList.toggle('on',login);$('tab-register').classList.toggle('on',!login);
+  $('login-form').style.display=login?'block':'none';$('register-form').style.display=login?'none':'block';
+  $('auth-title').textContent=login?'Sign in':'Create your account';
+  $('auth-sub').textContent=login?'Pick up where you left off.':'It takes a few seconds.';
+  $('auth-msg').className='msg';
+}
+function authMsg(m,type){const el=$('auth-msg');el.textContent=m;el.className='msg '+type}
+async function handleLogin(){
+  const email=$('login-email').value.trim(),password=$('login-password').value,b=$('login-btn');
+  if(!email||!password)return authMsg('Enter your email and password.','error');
+  b.disabled=true;b.textContent='Signing in…';
+  const {error}=await sb.auth.signInWithPassword({email,password});
+  if(error)authMsg(error.message,'error');
+  b.disabled=false;b.textContent='Sign in';
+}
+async function handleRegister(){
+  const email=$('reg-email').value.trim(),password=$('reg-password').value,b=$('reg-btn');
+  if(!email||!password)return authMsg('Enter your email and a password.','error');
+  if(password.length<6)return authMsg('Use at least 6 characters for the password.','error');
+  b.disabled=true;b.textContent='Creating account…';
+  const {data,error}=await sb.auth.signUp({email,password});
+  b.disabled=false;b.textContent='Create account';
+  if(error)return authMsg(error.message,'error');
+  if(data.session)return;                       // confirmation off: signed in already
+  switchTab('login');$('login-email').value=email;
+  authMsg('Account created. Confirm your email, then sign in.','success');
+}
+async function logout(){
+  await sb.auth.signOut();
+  cur=null;cache={};pdfs={};pending=[];
+  $('chat').style.display='none';$('none').style.display='grid';closeSide();
+}
+function showApp(){
+  $('auth').style.display='none';$('app').classList.add('on');
+  $('email').textContent=user.email;$('av').textContent=user.email[0].toUpperCase();
+  loadSessions();
+}
+function showAuth(){$('auth').style.display='grid';$('app').classList.remove('on')}
 
-    let currentUser = null;
-    let currentSession = null;
-    let pendingFiles = [];
-    let sessionPDFs = {};
+/* ---------- sessions ---------- */
+async function loadSessions(){
+  $('list').innerHTML='<div class="note">Loading chats…</div>';
+  try{const r=await api('/sessions');if(!r.ok)throw 0;renderSessions((await r.json()).sessions||[])}
+  catch(e){if(e.message==='Unauthorized'||e.message==='Not signed in')return;$('list').innerHTML='<div class="note">Couldn’t load your chats. Check that the server is running, then reload.</div>'}
+}
+function renderSessions(list){
+  $('list').innerHTML=list.length?list.map(s=>`<div class="s${cur?.id===s.id?' on':''}" data-id="${esc(s.id)}" data-title="${esc(s.title)}" tabindex="0" role="button">
+    <div class="t"><b>${esc(s.title)}</b><small>${when(s.updated_at)}</small></div>
+    <button class="icon del" aria-label="Delete chat" title="Delete chat"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg></button></div>`).join(''):'<div class="note">No chats yet. Start one with New chat.</div>';
+}
+$('list').addEventListener('click',e=>{
+  const row=e.target.closest('.s');if(!row)return;
+  if(e.target.closest('.del'))deleteChat(row.dataset.id);else openChat(row.dataset.id,row.dataset.title);
+});
+$('list').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.classList.contains('s'))openChat(e.target.dataset.id,e.target.dataset.title)});
+async function newChat(){
+  try{
+    const r=await api('/sessions',{method:'POST',body:JSON.stringify({title:'New Chat'})});
+    if(!r.ok)throw 0;const d=await r.json();
+    await loadSessions();openChat(d.session_id,'New Chat');
+  }catch(e){if(e.message!=='Unauthorized')toast('Couldn’t create a chat. Try again.',true)}
+}
+async function openChat(id,title){
+  cur={id,title};closeSide();
+  $('none').style.display='none';$('chat').style.display='flex';$('title').textContent=title;
+  document.querySelectorAll('.s').forEach(el=>el.classList.toggle('on',el.dataset.id===id));
+  $('col').innerHTML='<div class="note">Loading messages…</div>';chips(id);
+  await loadMessages(id);
+}
+async function deleteChat(id){
+  if(!confirm('Delete this chat and its messages?'))return;
+  try{
+    const r=await api('/sessions/'+id,{method:'DELETE'});if(!r.ok)throw 0;
+    delete cache[id];delete pdfs[id];
+    if(cur?.id===id){cur=null;$('chat').style.display='none';$('none').style.display='grid'}
+    await loadSessions();toast('Chat deleted');
+  }catch(e){if(e.message!=='Unauthorized')toast('Couldn’t delete the chat. Try again.',true)}
+}
 
-    // ── Mobile sidebar drawer ──
-    function toggleSidebar() {
-      document.getElementById('sidebar').classList.toggle('open');
-      document.getElementById('sidebar-overlay').classList.toggle('show');
-    }
-    function closeSidebar() {
-      document.getElementById('sidebar').classList.remove('open');
-      document.getElementById('sidebar-overlay').classList.remove('show');
-    }
+/* ---------- messages ---------- */
+const bubble=(role,text,cls='')=>role==='user'?`<div class="u">${esc(text)}</div>`:`<div class="a ${cls}">${fmt(text)}</div>`;
+const scroll=()=>{const m=$('msgs');m.scrollTop=m.scrollHeight};
+function emptyState(){return `<div class="empty"><h3>Ask a question about your document.</h3><p>Upload a PDF to this chat, then ask in your own words. Answers come only from the passages found in your files.</p><button class="btn pri" onclick="openUpload()">Upload a PDF</button></div>`}
+async function loadMessages(id){
+  let msgs=cache[id];
+  if(!msgs){
+    try{const r=await api(`/sessions/${id}/messages`);if(!r.ok)throw 0;msgs=(await r.json()).messages||[];cache[id]=msgs}
+    catch(e){if(cur?.id===id)$('col').innerHTML='<div class="a err">Couldn’t load this chat’s messages. Reopen the chat to try again.</div>';return}
+  }
+  if(cur?.id!==id)return;
+  $('col').innerHTML=msgs.length?msgs.map(m=>bubble(m.role==='user'?'user':'ai',m.content)).join(''):emptyState();
+  scroll();
+}
+async function send(){
+  if(busy)return;
+  if(!cur)return toast('Create or open a chat first.',true);
+  const input=$('input'),text=input.value.trim();if(!text)return;
+  const id=cur.id,col=$('col');
+  col.querySelector('.empty')?.remove();
+  col.insertAdjacentHTML('beforeend',bubble('user',text));(cache[id]||=[]).push({role:'user',content:text});
+  input.value='';grow(input);
+  col.insertAdjacentHTML('beforeend','<div class="a" id="typing"><div class="dots"><i></i><i></i><i></i></div></div>');scroll();
+  busy=true;$('send').disabled=true;
+  let html,ok=false,answer='';
+  try{
+    const r=await api('/chat',{method:'POST',body:JSON.stringify({message:text,session_id:id})});
+    const d=await r.json().catch(()=>({}));
+    if(r.ok&&d.answer){answer=d.answer;ok=true;html=bubble('ai',answer)}
+    else html=bubble('ai',d.detail?`The server returned an error: ${typeof d.detail==='string'?d.detail:'see the server log'}`:'Something went wrong on the server. Try sending that again.','err');
+  }catch(e){if(e.message==='Unauthorized'){document.getElementById('typing')?.remove();busy=false;$('send').disabled=false;return}html=bubble('ai','Couldn’t reach the server. Check your connection and try again.','err')}
+  document.getElementById('typing')?.remove();
+  if(cur?.id===id){col.insertAdjacentHTML('beforeend',html);scroll()}
+  if(ok)cache[id].push({role:'assistant',content:answer});
+  busy=false;$('send').disabled=false;input.focus();
+  if(ok&&cur?.id===id&&/^new chat$/i.test(cur.title))syncTitle();
+}
+async function syncTitle(){
+  try{
+    const r=await api('/sessions');if(!r.ok)return;const list=(await r.json()).sessions||[];
+    renderSessions(list);const m=list.find(s=>s.id===cur?.id);
+    if(m&&m.title!==cur.title){cur.title=m.title;$('title').textContent=m.title}
+  }catch(e){}
+}
 
-    async function init() {
-      const { data: { session } } = await sb.auth.getSession();
-      if (session) { currentUser = session.user; showApp(); }
-      sb.auth.onAuthStateChange((event, session) => {
-        if (session) {
-          currentUser = session.user;
-          // Supabase silently fires TOKEN_REFRESHED whenever the tab regains
-          // focus (normal background behavior). Only re-render the app on an
-          // actual sign-in — otherwise every tab switch was re-fetching and
-          // re-rendering the whole session list, which looked like a reload.
-          if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-            showApp();
-          }
-        } else {
-          currentUser = null;
-          showAuth();
-        }
-      });
-    }
+/* ---------- upload ---------- */
+function openUpload(){
+  if(!cur)return toast('Open a chat first.',true);
+  pending=[];$('ups').innerHTML='';$('go').disabled=true;$('go').textContent='Upload';
+  $('modal').classList.add('open');dropEl.focus();
+}
+function closeUpload(){$('modal').classList.remove('open');pending=[]}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeUpload();closeStats()}});
+$('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeUpload()});
+function dragOver(e){e.preventDefault();dropEl.classList.add('over')}
+function dropFiles(e){e.preventDefault();dropEl.classList.remove('over');add([...e.dataTransfer.files])}
+function pick(e){add([...e.target.files]);e.target.value=''}
+function add(files){
+  const pdf=files.filter(f=>/\.pdf$/i.test(f.name)||f.type==='application/pdf');
+  if(pdf.length<files.length)toast('Only PDF files can be uploaded.',true);
+  pdf.forEach(f=>{if(!pending.some(p=>p.name===f.name&&p.size===f.size))pending.push(f)});
+  $('ups').innerHTML=pending.map((f,i)=>`<div class="up"><span>${esc(f.name)}</span><span id="st${i}">Ready</span></div>`).join('');
+  $('go').disabled=!pending.length;
+}
+async function upload(){
+  if(!pending.length||!cur)return;
+  const id=cur.id,b=$('go');b.disabled=true;b.textContent='Uploading…';
+  let okCount=0;
+  for(let i=0;i<pending.length;i++){
+    const st=$('st'+i);st.textContent='Uploading…';
+    try{
+      const fd=new FormData();fd.append('file',pending[i]);
+      const r=await api('/upload/'+id,{method:'POST',body:fd});
+      if(r.ok){st.textContent='Uploaded, indexing';st.className='ok';okCount++;(pdfs[id]||=[]).push(pending[i].name)}
+      else{st.textContent='Failed';st.className='bad'}
+    }catch(e){st.textContent='Failed';st.className='bad'}
+  }
+  b.textContent='Done';chips(id);
+  if(okCount)toast('Indexing runs in the background. Long PDFs can take a few minutes before you can ask about them.');
+  else toast('Upload failed. Try again.',true);
+  pending=[];setTimeout(closeUpload,okCount?1600:2500);
+}
+function chips(id){$('chips').innerHTML=(pdfs[id]||[]).map(n=>`<div class="chip">${esc(n)}</div>`).join('')}
 
-    // ── Auth ──
-    function switchTab(tab) {
-      document.querySelectorAll('.tab-btn').forEach((b, i) => {
-        b.classList.toggle('active', (i === 0 && tab === 'login') || (i === 1 && tab === 'register'));
-      });
-      document.getElementById('login-form').style.display = tab === 'login' ? 'block' : 'none';
-      document.getElementById('register-form').style.display = tab === 'register' ? 'block' : 'none';
-      document.getElementById('auth-subtitle').textContent = tab === 'login'
-        ? 'Sign in to continue to your sessions' : 'Create an account to get started';
-      hideAuthMsg();
-    }
+/* ---------- response times ---------- */
+const sec=v=>v==null?'–':Number(v).toFixed(1)+' s';
+const allLine=a=>a.count?`<p class="cmp">Everyone: typical ${sec(a.p50)}, slowest 5% ${sec(a.p95)}, across ${a.count} answers from ${a.users} ${a.users===1?'person':'people'}.</p>`:'';
+function openStats(){closeSide();$('stats-modal').classList.add('open');loadStats()}
+function closeStats(){$('stats-modal').classList.remove('open')}
+$('stats-modal').addEventListener('click',e=>{if(e.target.id==='stats-modal')closeStats()});
+async function loadStats(){
+  $('s-body').innerHTML='<div class="note" style="padding:20px 0">Loading…</div>';
+  try{
+    const r=await api('/metrics/latency?days='+$('s-days').value);if(!r.ok)throw 0;
+    renderStats(await r.json());
+  }catch(e){if(e.message==='Unauthorized')return;$('s-body').innerHTML='<div class="a err" style="margin-top:14px">Couldn’t load response times. Make sure the server has the /metrics/latency route, then try again.</div>'}
+}
+function renderStats(d){
+  const me=d.me;
+  if(!me.count){$('s-body').innerHTML=`<p style="margin:16px 0;color:var(--muted)">No answers in the last ${d.days} days. Ask a question and your timings will show up here.</p>${allLine(d.all)}`;return}
+  const max=Math.max(...d.daily.map(x=>x.p95||0),1);
+  $('s-body').innerHTML=`<div class="stats">
+    <div class="stat"><b>${sec(me.p50)}</b><small>Typical (median)</small></div>
+    <div class="stat"><b>${sec(me.p95)}</b><small>Slowest 5% (p95)</small></div>
+    <div class="stat"><b>${me.count}</b><small>Your answers</small></div></div>
+    <div class="bars" role="img" aria-label="Answer time per day">${d.daily.map(x=>`<div class="d" title="${x.date}: typical ${sec(x.p50)}, slowest 5% ${sec(x.p95)}, ${x.count} answers"><i style="height:${Math.max(4,(x.p95/max)*100)}%"><u style="height:${x.p95?(x.p50/x.p95)*100:100}%"></u></i></div>`).join('')}</div>
+    <small class="cap">Per day: typical (dark) and slowest 5% (light)</small>
+    ${allLine(d.all)}
+    <small class="cap">Your latest answers</small>
+    <div class="rec">${d.recent.map(x=>`<div><span>${new Date(x.at).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span><span>${sec(x.seconds)}</span></div>`).join('')}</div>`;
+}
 
-    function showAuthMsg(msg, type) {
-      const el = document.getElementById('auth-msg');
-      el.textContent = msg;
-      el.className = 'auth-msg ' + type;
-      el.style.display = 'block';
-    }
-    function hideAuthMsg() {
-      document.getElementById('auth-msg').style.display = 'none';
-    }
-
-    async function handleLogin() {
-      const email = document.getElementById('login-email').value.trim();
-      const password = document.getElementById('login-password').value;
-      const btn = document.querySelector('#login-form .btn');
-      if (!email || !password) return showAuthMsg('Please fill in all fields.', 'error');
-
-      btn.disabled = true; btn.textContent = 'Signing in…';
-      const { error } = await sb.auth.signInWithPassword({ email, password });
-      if (error) showAuthMsg(error.message, 'error');
-      btn.disabled = false; btn.textContent = 'Sign in';
-    }
-
-    async function handleRegister() {
-      const email = document.getElementById('reg-email').value.trim();
-      const password = document.getElementById('reg-password').value;
-      const btn = document.querySelector('#register-form .btn');
-      if (!email || !password) return showAuthMsg('Please fill in all fields.', 'error');
-      if (password.length < 6) return showAuthMsg('Password must be at least 6 characters.', 'error');
-
-      btn.disabled = true; btn.textContent = 'Creating account…';
-      const { data, error } = await sb.auth.signUp({ email, password });
-
-      if (error) {
-        showAuthMsg(error.message, 'error');
-        btn.disabled = false; btn.textContent = 'Create account';
-        return;
-      }
-      if (data.session) {
-        // Email confirmation is off — user is signed in immediately.
-        btn.disabled = false; btn.textContent = 'Create account';
-        return;
-      }
-      // No session: confirmation required. Say so clearly and hand them to sign-in.
-      showAuthMsg('Account created — check your email to confirm it, then sign in.', 'success');
-      btn.disabled = false; btn.textContent = 'Create account';
-      switchTab('login');
-      document.getElementById('login-email').value = email;
-    }
-
-    async function handleLogout() {
-      await sb.auth.signOut();
-      currentSession = null;
-      currentUser = null;
-    }
-
-    // ── App shell ──
-    function showApp() {
-      document.getElementById('auth-screen').style.display = 'none';
-      document.getElementById('app').classList.add('active');
-      const email = currentUser.email;
-      document.getElementById('user-email').textContent = email;
-      document.getElementById('user-avatar').textContent = email[0].toUpperCase();
-      loadSessions();
-    }
-    function showAuth() {
-      document.getElementById('auth-screen').style.display = 'flex';
-      document.getElementById('app').classList.remove('active');
-    }
-
-    // ── Sessions ──
-    async function loadSessions() {
-      const list = document.getElementById('sessions-list');
-      list.innerHTML = Array.from({ length: 4 }).map(() => `
-      <div class="skeleton-row">
-        <div class="skeleton-box" style="width:20px;height:20px;"></div>
-        <div style="flex:1">
-          <div class="skeleton-box" style="width:70%;height:10px;margin-bottom:6px;"></div>
-          <div class="skeleton-box" style="width:40%;height:8px;"></div>
-        </div>
-      </div>`).join('');
-
-      const token = await getToken();
-      if (!token) {
-        showAuth();
-        return;
-      }
-      const res = await fetch(`${API_BASE}/sessions`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.status === 401) {
-        showAuth();
-        showAuthMsg('Session expired. Please sign in again.', 'error');
-        return;
-      }
-      const data = await res.json();
-      renderSessions(data.sessions || []);
-
-    }
-
-    function renderSessions(sessions) {
-      const list = document.getElementById('sessions-list');
-      if (sessions.length === 0) {
-        list.innerHTML = '<div style="padding:16px 10px;font-size:12px;color:var(--text-muted);">No chats yet</div>';
-        return;
-      }
-      list.innerHTML = sessions.map(s => `
-      <div class="session-item ${currentSession?.id === s.id ? 'active' : ''}" onclick="selectSession('${s.id}', '${escapeHtml(s.title)}')">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 3h10M2 7h10M2 11h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-        <div class="session-info">
-          <div class="session-title">${escapeHtml(s.title)}</div>
-          <div class="session-date">${formatDate(s.updated_at)}</div>
-        </div>
-        <button class="delete-btn" onclick="deleteSession(event, '${s.id}')">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-          </svg>
-        </button>
-      </div>`).join('');
-    }
-
-    async function createNewSession() {
-      const token = await getToken();
-      const res = await fetch(`${API_BASE}/sessions`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: 'New Chat' })
-      });
-      const data = await res.json();
-      await loadSessions();
-      selectSession(data.session_id, 'New Chat');
-      closeSidebar();
-    }
-
-    async function selectSession(id, title) {
-      currentSession = { id, title };
-      document.getElementById('no-session').style.display = 'none';
-      document.getElementById('chat-view').style.display = 'flex';
-      document.getElementById('chat-title').textContent = title;
-      document.getElementById('messages-area').innerHTML = `<div class="loading-state"><div class="spinner"></div></div>`;
-      document.getElementById('pdf-badges').innerHTML = '';
-
-      document.querySelectorAll('.session-item').forEach(el => {
-        el.classList.toggle('active', el.onclick.toString().includes(id));
-      });
-
-      await loadMessages(id);
-      loadPDFBadges(id);
-      closeSidebar(); // on mobile, picking a chat should close the drawer automatically
-    }
-
-    async function deleteSession(e, id) {
-      e.stopPropagation();
-      if (!confirm('Delete this chat?')) return;
-      const token = await getToken();
-      await fetch(`${API_BASE}/sessions/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
-      if (currentSession?.id === id) {
-        currentSession = null;
-        document.getElementById('no-session').style.display = 'flex';
-        document.getElementById('chat-view').style.display = 'none';
-      }
-      await loadSessions();
-      showToast('Chat deleted');
-    }
-
-    // ── Messages ──
-    async function loadMessages(sessionId) {
-      const token = await getToken();
-      const res = await fetch(`${API_BASE}/sessions/${sessionId}/messages`, { headers: { Authorization: `Bearer ${token}` } });
-      const data = await res.json();
-      if (currentSession?.id !== sessionId) return;
-
-      const messages = data.messages || [];
-      const area = document.getElementById('messages-area');
-      if (messages.length === 0) {
-        area.innerHTML = `
-        <div class="empty-state" id="empty-state">
-          <div class="node-dot" style="width:14px;height:14px;box-shadow:0 0 0 6px var(--accent-soft);margin-bottom:10px;"></div>
-          <h2>Ask anything, or attach a document</h2>
-          <p>GraphAgenticRAG routes your question across hybrid retrieval, graph traversal, and live web search — and verifies its own answer before replying.</p>
-        </div>`;
-        return;
-      }
-      area.innerHTML = messages.map(m => renderMessage(m.role === 'user' ? 'user' : 'ai', m.content)).join('');
-      area.scrollTop = area.scrollHeight;
-    }
-
-    function renderMessage(role, content) {
-      const isUser = role === 'user';
-      const initials = isUser ? (currentUser?.email?.[0]?.toUpperCase() || 'U') : 'AI';
-      const formatted = escapeHtml(content).replace(/\n/g, '<br>');
-      return `
-      <div class="msg-row ${isUser ? 'user' : 'ai'}">
-        <div class="msg-avatar">${initials}</div>
-        <div class="msg-bubble">${formatted}</div>
-      </div>`;
-    }
-
-    async function sendMessage() {
-      if (!currentSession) return showToast('Select or create a chat first', true);
-      const input = document.getElementById('message-input');
-      const message = input.value.trim();
-      if (!message) return;
-
-      const area = document.getElementById('messages-area');
-      document.getElementById('empty-state')?.remove();
-
-      area.insertAdjacentHTML('beforeend', renderMessage('user', message));
-      input.value = ''; input.style.height = 'auto';
-      area.scrollTop = area.scrollHeight;
-
-      const typingId = 'typing-' + Date.now();
-      area.insertAdjacentHTML('beforeend', `
-      <div class="msg-row ai" id="${typingId}">
-        <div class="msg-avatar">AI</div>
-        <div class="msg-bubble"><div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div></div>
-      </div>`);
-      area.scrollTop = area.scrollHeight;
-      document.getElementById('send-btn').disabled = true;
-
-      try {
-        const token = await getToken();
-        const res = await fetch(`${API_BASE}/chat`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message, session_id: currentSession.id })
-        });
-        const data = await res.json();
-        document.getElementById(typingId)?.remove();
-
-        area.insertAdjacentHTML('beforeend', renderMessage('ai', data.answer || "Something went wrong. Please try again."));
-
-        if (currentSession && currentSession.title === 'New Chat') {
-          await syncCurrentSessionTitle();
-        }
-      } catch (err) {
-        document.getElementById(typingId)?.remove();
-        area.insertAdjacentHTML('beforeend', renderMessage('ai', 'Connection error. Is the server running?'));
-      }
-      document.getElementById('send-btn').disabled = false;
-      area.scrollTop = area.scrollHeight;
-    }
-
-    async function syncCurrentSessionTitle() {
-      if (!currentSession) return;
-      const token = await getToken();
-      const res = await fetch(`${API_BASE}/sessions`, { headers: { Authorization: `Bearer ${token}` } });
-      const data = await res.json();
-      const sessions = data.sessions || [];
-      renderSessions(sessions);
-      const match = sessions.find(s => s.id === currentSession.id);
-      if (match && match.title !== currentSession.title) {
-        currentSession.title = match.title;
-        document.getElementById('chat-title').textContent = match.title;
-      }
-    }
-
-    // ── Upload ──
-    function openUpload() {
-      if (!currentSession) return showToast('Select a chat first', true);
-      document.getElementById('upload-panel').classList.add('open');
-      document.getElementById('upload-list').innerHTML = '';
-      document.getElementById('upload-confirm-btn').disabled = true;
-      pendingFiles = [];
-    }
-    function closeUpload() {
-      document.getElementById('upload-panel').classList.remove('open');
-      pendingFiles = [];
-    }
-    function handleDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('dragover'); }
-    function handleDragLeave() { document.getElementById('drop-zone').classList.remove('dragover'); }
-    function handleDrop(e) {
-      e.preventDefault();
-      document.getElementById('drop-zone').classList.remove('dragover');
-      const files = [...e.dataTransfer.files].filter(f => f.name.endsWith('.pdf'));
-      if (files.length) addPendingFiles(files);
-    }
-    function handleFileSelect(e) {
-      const files = [...e.target.files];
-      if (files.length) addPendingFiles(files);
-      e.target.value = '';
-    }
-    function addPendingFiles(files) {
-      pendingFiles = [...pendingFiles, ...files];
-      renderUploadList();
-      document.getElementById('upload-confirm-btn').disabled = false;
-    }
-    function renderUploadList() {
-      document.getElementById('upload-list').innerHTML = pendingFiles.map((f, i) => `
-      <div class="upload-item" id="upload-item-${i}">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-        </svg>
-        <span class="upload-item-name">${escapeHtml(f.name)}</span>
-        <span class="upload-item-status" id="status-${i}">Ready</span>
-      </div>`).join('');
-    }
-
-    async function uploadFiles() {
-      if (!pendingFiles.length) return;
-      const btn = document.getElementById('upload-confirm-btn');
-      btn.disabled = true; btn.textContent = 'Uploading...';
-      const token = await getToken();
-
-      for (let i = 0; i < pendingFiles.length; i++) {
-        const file = pendingFiles[i];
-        const statusEl = document.getElementById(`status-${i}`);
-        statusEl.textContent = 'Uploading...';
-        try {
-          const formData = new FormData();
-          formData.append('file', file);
-          const res = await fetch(`${API_BASE}/upload/${currentSession.id}`, {
-            method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData
-          });
-          if (res.ok) {
-            statusEl.textContent = 'Processing'; statusEl.className = 'upload-item-status done';
-            if (!sessionPDFs[currentSession.id]) sessionPDFs[currentSession.id] = [];
-            sessionPDFs[currentSession.id].push(file.name);
-          } else {
-            statusEl.textContent = 'Failed'; statusEl.className = 'upload-item-status error';
-          }
-        } catch {
-          statusEl.textContent = 'Error'; statusEl.className = 'upload-item-status error';
-        }
-      }
-      btn.textContent = 'Done';
-      loadPDFBadges(currentSession.id);
-      showToast('PDFs uploaded and processing in background');
-      pendingFiles = [];
-      setTimeout(closeUpload, 1500);
-    }
-
-    function loadPDFBadges(sessionId) {
-      const badges = document.getElementById('pdf-badges');
-      const pdfs = sessionPDFs[sessionId] || [];
-      badges.innerHTML = pdfs.map(name => `
-      <div class="doc-chip">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
-        ${escapeHtml(name)}
-      </div>`).join('');
-    }
-
-    // ── Helpers ──
-    async function getToken() {
-      const { data: { session } } = await sb.auth.getSession();
-      return session?.access_token;
-    }
-    function handleKeydown(e) {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-    }
-    function autoResize(el) {
-      el.style.height = 'auto';
-      el.style.height = Math.min(el.scrollHeight, 160) + 'px';
-    }
-    function escapeHtml(str) {
-      const d = document.createElement('div');
-      d.textContent = str;
-      return d.innerHTML;
-    }
-    function formatDate(iso) {
-      const d = new Date(iso);
-      const now = new Date();
-      const diff = now - d;
-      if (diff < 86400000) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      if (diff < 604800000) return d.toLocaleDateString([], { weekday: 'short' });
-      return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    }
-    let toastTimer;
-    function showToast(msg, isError = false) {
-      const el = document.getElementById('toast');
-      el.textContent = msg;
-      el.className = 'toast show' + (isError ? ' error' : '');
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => el.className = 'toast', 3000);
-    }
-
-    init();
-  </script>
+init();
+</script>
 </body>
-
 </html>

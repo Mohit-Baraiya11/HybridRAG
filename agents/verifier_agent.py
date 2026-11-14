@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 from typing import Literal
 import os
+import time
 
 load_dotenv()
 
@@ -33,6 +34,7 @@ def verifier_agent(state):
 
     structured_llm = llm.with_structured_output(VerificationResult, include_raw=True)
 
+    t0 = time.time()
     raw_result = structured_llm.invoke(f"""You are an answer verifier.
     Approve if the answer is grounded in the context and attempts to address the question.
     Re-evaluate ONLY if the answer is completely hallucinated, totally off-topic, or directly contradicts the context.
@@ -43,6 +45,8 @@ def verifier_agent(state):
     Generated Answer: {final_answer}
 
     Decide:""")
+    elapsed = round(time.time() - t0, 2)
+    print(f"⏱  [verifier] done in {elapsed}s")
 
     result = raw_result["parsed"]        # VerificationResult pydantic object
     raw_response = raw_result["raw"]     # AIMessage with metadata

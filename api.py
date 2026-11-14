@@ -1,3 +1,6 @@
+from datetime import timedelta
+from datetime import timezone
+from datetime import datetime
 import os
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, Header, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,21 +14,27 @@ from langchain_core.messages import HumanMessage,AIMessage
 
 from graph.workflow import graph
 from tools.hybrid_rag_tool import ingest_pdf
-from tools.graph_rag_tool import ingest_pdf_for_graph
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from langchain_groq import ChatGroq
 from fastapi.responses import StreamingResponse
 import asyncio
 import time
+from tools.hybrid_rag_tool import warm_up  
 
 load_dotenv()
 
 app = FastAPI()
 
 supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+admin_db = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_ROLE_KEY"))
 
 import re
 
+@app.on_event("startup")
+def _startup():
+    warm_up()
+    
 @app.middleware("http")
 async def normalize_path_middleware(request, call_next):
     if "//" in request.scope["path"]:
@@ -80,7 +89,6 @@ class SessionCreate(BaseModel):
 def run_ingestion(tmp_path: str, user_id: str, session_id: str, filename: str, token: str = None):
     try:
         ingest_pdf(tmp_path, user_id=user_id, session_id=session_id)
-        ingest_pdf_for_graph(tmp_path, user_id=user_id, session_id=session_id)
         print(f"Background ingestion complete: {filename}")
 
         db = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
@@ -227,6 +235,7 @@ async def upload_pdf(
 @app.post("/chat")
 async def chat(request: ChatRequest, auth=Depends(get_user_db)):
     user, token, db = auth
+
     # Verify session belongs to user
     session = db.table("sessions") \
         .select("id") \
@@ -244,7 +253,7 @@ async def chat(request: ChatRequest, auth=Depends(get_user_db)):
         .execute()
     is_first_message = msg_count.count == 0
 
-    # Fetch history
+    # Fetch last messages (newest first, then reversed to chronological)
     history = db.table("messages") \
         .select("role, content") \
         .eq("session_id", request.session_id) \
@@ -269,20 +278,18 @@ async def chat(request: ChatRequest, auth=Depends(get_user_db)):
 
     messages.append(HumanMessage(content=request.message))
 
-    graph_start = time.time()
-
-    # before graph.invoke
+    # Uploaded documents for this session
     docs = db.table("documents") \
         .select("filename") \
         .eq("session_id", request.session_id) \
         .execute()
+    print("session:", request.session_id, "| docs rows:", docs.data)  # remove once documents insert is fixed
     pdf_paths = [d["filename"] for d in docs.data]
 
+    graph_start = time.time()
     result = graph.invoke({
         "messages": messages,
-        "history": history,
         "retrieved_context": [],
-        "current_context": [],
         "user_id": user.id,
         "session_id": request.session_id,
         "verification_attempts": 0,
@@ -298,6 +305,20 @@ async def chat(request: ChatRequest, auth=Depends(get_user_db)):
     answer = result.get("synthesizer_result", "I couldn't generate an answer.")
     tokens = result.get("total_tokens", 0)
 
+    # Log latency once (never let logging break chat)
+    try:
+        routing = result.get("routing_decision") or {}
+        routed_tools = routing.get("tools", []) if isinstance(routing, dict) else []
+        admin_db.table("latency_logs").insert({
+            "user_id": user.id,
+            "session_id": request.session_id,
+            "latency_seconds": graph_latency,
+            "routed_tools": routed_tools,
+            "tokens_used": tokens,
+        }).execute()
+    except Exception as e:
+        print(f"Latency log failed: {e}")
+
     # Save assistant message
     db.table("messages").insert({
         "session_id": request.session_id,
@@ -306,15 +327,18 @@ async def chat(request: ChatRequest, auth=Depends(get_user_db)):
         "content": answer,
     }).execute()
 
-    llm = ChatGroq(model="openai/gpt-oss-20b", temperature=0)
-    # Generate title on first message only
+    # Generate title on first message only (fast non-reasoning model)
     if is_first_message:
-        title_result = llm.invoke(f"Summarize this message into a short 3-5 word chat title:\n\n{request.message}")
+        title_llm = ChatGroq(model="openai/gpt-oss-20b", temperature=0, reasoning_effort="low")
+        title_result = title_llm.invoke(
+            f"Summarize this message into a short 3-5 word chat title:\n\n{request.message}"
+        )
         title = title_result.content.strip()
         db.table("sessions").update({
             "title": title,
             "updated_at": "now()",
-            "total_tokens": tokens
+            "total_tokens": tokens,
+            "last_latency": graph_latency
         }).eq("id", request.session_id).execute()
     else:
         current = db.table("sessions") \
@@ -338,6 +362,48 @@ async def health():
     return {"status": "ok"}
 
 
-@app.get("/")
+@app.get("/api-status")
 async def check():
     return {"message": "API is running......"}
+
+
+@app.get("/")
+async def serve_ui():
+    """Serve the frontend UI so it runs on the same origin as the API,
+    avoiding browser blocks on fetch() from file:// pages."""
+    return FileResponse("index.html")
+
+
+def _pct(vals, p):
+    if not vals:
+        return None
+    s = sorted(vals)
+    k = (len(s) - 1) * p / 100
+    f = int(k); c = min(f + 1, len(s) - 1)
+    return round(s[f] + (s[c] - s[f]) * (k - f), 2)
+
+def _summary(rows):
+    v = [float(r["latency_seconds"]) for r in rows if r.get("latency_seconds") is not None]
+    return {"count": len(v), "p50": _pct(v, 50), "p95": _pct(v, 95),
+            "mean": round(sum(v) / len(v), 2) if v else None}
+
+@app.get("/metrics/latency")
+async def latency_metrics(days: int = 14, auth=Depends(get_user_db)):
+    user, token, db = auth
+    days = max(1, min(days, 90))
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    rows = (admin_db.table("latency_logs")
+            .select("user_id,latency_seconds,created_at")
+            .gte("created_at", since).order("created_at", desc=True)
+            .limit(5000).execute()).data or []
+    mine = [r for r in rows if r["user_id"] == user.id]
+    by_day = {}
+    for r in mine:
+        by_day.setdefault(r["created_at"][:10], []).append(r)
+    return {
+        "days": days,
+        "me": _summary(mine),
+        "all": {**_summary(rows), "users": len({r["user_id"] for r in rows})},
+        "daily": [{"date": d, **_summary(v)} for d, v in sorted(by_day.items())],
+        "recent": [{"at": r["created_at"], "seconds": r["latency_seconds"]} for r in mine[:10]],
+    }

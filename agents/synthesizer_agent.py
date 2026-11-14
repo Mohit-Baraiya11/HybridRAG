@@ -1,6 +1,10 @@
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
 from langchain_core.messages import SystemMessage
+import time
+import markdown
+# pyrefly: ignore[missing-import]
+from bs4 import BeautifulSoup
 
 load_dotenv()
 
@@ -8,6 +12,14 @@ llm = ChatGroq(
     model="openai/gpt-oss-120b",
     temperature=0,
 )
+
+def strip_markdown(text: str) -> str:
+    # 1. Convert markdown to HTML
+    html = markdown.markdown(text)
+    # 2. Extract plain text from HTML
+    soup = BeautifulSoup(html, "html.parser")
+    return soup.get_text()
+
 
 
 def synthesizer_agent(state):
@@ -49,9 +61,13 @@ def synthesizer_agent(state):
     recent_messages = messages[-4:]
     full_messages = [SystemMessage(content=system_prompt)] + recent_messages
 
+    t0 = time.time()
     result = llm.invoke(full_messages)
+    clean_text = strip_markdown(result.content)
+    elapsed = round(time.time() - t0, 2)
+    print(f"⏱  [synthesizer] done in {elapsed}s")
     usage = result.response_metadata.get("token_usage", {})
     tokens = usage.get("total_tokens", 0) + state.get("total_tokens", 0)
-    print(f"\nFinal Answer:\n{result.content}")
+    print(f"\nFinal Answer:\n{clean_text}")
 
-    return {"synthesizer_result": result.content, "total_tokens": tokens}
+    return {"synthesizer_result": clean_text, "total_tokens": tokens}

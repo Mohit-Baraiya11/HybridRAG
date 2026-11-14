@@ -1,0 +1,431 @@
+{
+  "args": {
+    "module": "tools.hybrid_rag_tool",
+    "dataset": "/Users/user/Desktop/GraphAgenticRAG/eval/golden_dataset.json",
+    "user_id": "b4dcaea6-d327-4524-9027-3d650280f888",
+    "session_id": "163397f6-879f-449c-9680-c0248226cfc3",
+    "k": 5,
+    "alpha": 0.5,
+    "no_rerank": false,
+    "sleep": 0.2,
+    "verbose": false,
+    "out": "/Users/user/Desktop/GraphAgenticRAG/eval/retrieval_eval_results.json"
+  },
+  "overall": {
+    "n": 31,
+    "hit@1": 0.65,
+    "hit@3": 0.87,
+    "hit@5": 0.97,
+    "mrr": 0.78,
+    "avg_ms": 1751
+  },
+  "rows": [
+    {
+      "id": "q01",
+      "type": "factual",
+      "question": "How do you view the source code of a function in IPython?",
+      "rank": 1,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 3047,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        23
+      ]
+    },
+    {
+      "id": "q02",
+      "type": "paraphrase",
+      "question": "How can I make Python error tracebacks less verbose in IPython?",
+      "rank": 1,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 2215,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        39
+      ]
+    },
+    {
+      "id": "q03",
+      "type": "conceptual",
+      "question": "Why can %timeit give a misleading result when timing a list sort, and what should be used instead?",
+      "rank": 1,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 1471,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        44
+      ]
+    },
+    {
+      "id": "q04",
+      "type": "keyword",
+      "question": "Which package has to be installed to use the %lprun line-by-line profiler?",
+      "rank": 2,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 2047,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        46
+      ]
+    },
+    {
+      "id": "q05",
+      "type": "factual",
+      "question": "What are the rules of broadcasting in NumPy?",
+      "rank": 1,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 2258,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        83
+      ]
+    },
+    {
+      "id": "q06",
+      "type": "factual",
+      "question": "What does np.argsort return?",
+      "rank": 1,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 1955,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        105
+      ]
+    },
+    {
+      "id": "q07",
+      "type": "keyword",
+      "question": "How can I increment array positions given repeated indices, since x[i] += 1 does not accumulate?",
+      "rank": 1,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 1998,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        101
+      ]
+    },
+    {
+      "id": "q08",
+      "type": "factual",
+      "question": "What is the difference between loc and iloc in Pandas?",
+      "rank": 1,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 2095,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        128
+      ]
+    },
+    {
+      "id": "q09",
+      "type": "factual",
+      "question": "What is a many-to-one join in pd.merge?",
+      "rank": 1,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 2134,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        166
+      ]
+    },
+    {
+      "id": "q10",
+      "type": "keyword",
+      "question": "How do I deal with overlapping column names when merging two DataFrames?",
+      "rank": 1,
+      "anchors_found": 2,
+      "anchors_total": 2,
+      "ms": 1434,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        171,
+        172
+      ]
+    },
+    {
+      "id": "q11",
+      "type": "conceptual",
+      "question": "What does split-apply-combine mean in a Pandas groupby operation?",
+      "rank": 1,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 1639,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        179
+      ]
+    },
+    {
+      "id": "q12",
+      "type": "conceptual",
+      "question": "When is it worth using eval() or query() in Pandas?",
+      "rank": null,
+      "anchors_found": 0,
+      "anchors_total": 1,
+      "ms": 2051,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        232
+      ]
+    },
+    {
+      "id": "q13",
+      "type": "conceptual",
+      "question": "How do resample() and asfreq() differ in Pandas time series?",
+      "rank": 1,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 1639,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        216
+      ]
+    },
+    {
+      "id": "q14",
+      "type": "factual",
+      "question": "What are the two interfaces Matplotlib provides?",
+      "rank": 1,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 1846,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        240
+      ]
+    },
+    {
+      "id": "q15",
+      "type": "keyword",
+      "question": "How do I save a Matplotlib figure as a PNG file?",
+      "rank": 1,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 1332,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        239
+      ]
+    },
+    {
+      "id": "q16",
+      "type": "factual",
+      "question": "What are the steps of the typical Scikit-Learn estimator API workflow?",
+      "rank": 2,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 1260,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        365
+      ]
+    },
+    {
+      "id": "q17",
+      "type": "conceptual",
+      "question": "What does it mean for a model to underfit versus overfit the data?",
+      "rank": 1,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 1712,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        382
+      ]
+    },
+    {
+      "id": "q18",
+      "type": "paraphrase",
+      "question": "How should categorical features such as neighborhood names be encoded for a model?",
+      "rank": 2,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 1639,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        394
+      ]
+    },
+    {
+      "id": "q19",
+      "type": "keyword",
+      "question": "What is TF-IDF and how is it computed in Scikit-Learn?",
+      "rank": 1,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 1433,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        396
+      ]
+    },
+    {
+      "id": "q20",
+      "type": "factual",
+      "question": "What are the advantages of naive Bayes classifiers?",
+      "rank": 1,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 1230,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        407
+      ]
+    },
+    {
+      "id": "q21",
+      "type": "conceptual",
+      "question": "What is the kernel trick in support vector machines?",
+      "rank": 4,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 1401,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        431
+      ]
+    },
+    {
+      "id": "q22",
+      "type": "paraphrase",
+      "question": "How can principal component analysis be used to clean up noisy data?",
+      "rank": 3,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 1515,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        458
+      ]
+    },
+    {
+      "id": "q23",
+      "type": "factual",
+      "question": "How does the k-means algorithm work?",
+      "rank": 2,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 1800,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        483
+      ]
+    },
+    {
+      "id": "q24",
+      "type": "conceptual",
+      "question": "Why might Gaussian mixture models be preferred over k-means?",
+      "rank": 4,
+      "anchors_found": 1,
+      "anchors_total": 2,
+      "ms": 1642,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        495,
+        497
+      ]
+    },
+    {
+      "id": "q25",
+      "type": "keyword",
+      "question": "What does the bandwidth parameter control in kernel density estimation?",
+      "rank": 2,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 1441,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        514
+      ]
+    },
+    {
+      "id": "q26",
+      "type": "multi_chunk",
+      "question": "What steps are involved in computing HOG features for images?",
+      "rank": 5,
+      "anchors_found": 2,
+      "anchors_total": 2,
+      "ms": 1433,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        524,
+        525
+      ]
+    },
+    {
+      "id": "q27",
+      "type": "conceptual",
+      "question": "How is bagging related to random forests?",
+      "rank": 1,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 2341,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        444
+      ]
+    },
+    {
+      "id": "q28",
+      "type": "paraphrase",
+      "question": "What three skill areas does the author say data science combines?",
+      "rank": 1,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 1274,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        14
+      ]
+    },
+    {
+      "id": "q29",
+      "type": "factual",
+      "question": "Does the book use Python 2 or Python 3 syntax?",
+      "rank": 1,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 1916,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        15
+      ]
+    },
+    {
+      "id": "q30",
+      "type": "factual",
+      "question": "Which Python library is described as handling heterogeneous and labeled data?",
+      "rank": 1,
+      "anchors_found": 1,
+      "anchors_total": 1,
+      "ms": 1534,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        15
+      ]
+    },
+    {
+      "id": "q31",
+      "type": "multi_chunk",
+      "question": "What are the weaknesses of k-means that motivate Gaussian mixture models, and how do GMMs generalize the E-M algorithm?",
+      "rank": 2,
+      "anchors_found": 2,
+      "anchors_total": 2,
+      "ms": 1553,
+      "n_contexts": 5,
+      "expected_pdf_pages": [
+        495,
+        498
+      ]
+    }
+  ]
+}

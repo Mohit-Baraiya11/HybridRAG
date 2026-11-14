@@ -1,0 +1,291 @@
+{
+  "config": {
+    "k": 5,
+    "alpha": 0.5,
+    "rerank": true
+  },
+  "judge": "openai/gpt-oss-120b",
+  "overall": {
+    "n": 31,
+    "context_precision": 0.912,
+    "context_recall": 1.0,
+    "failed_scores": 18
+  },
+  "by_type": {
+    "factual": {
+      "n": 11,
+      "context_precision": 0.887,
+      "context_recall": 1.0
+    },
+    "paraphrase": {
+      "n": 4,
+      "context_precision": 0.917,
+      "context_recall": 1.0
+    },
+    "conceptual": {
+      "n": 8,
+      "context_precision": 0.938,
+      "context_recall": 1.0
+    },
+    "keyword": {
+      "n": 6,
+      "context_precision": 0.919,
+      "context_recall": 1.0
+    },
+    "multi_chunk": {
+      "n": 2,
+      "context_precision": null,
+      "context_recall": null
+    }
+  },
+  "per_question": [
+    {
+      "id": "q01",
+      "type": "factual",
+      "question": "How do you view the source code of a function in IPython?",
+      "context_precision": 0.867,
+      "context_recall": 1.0,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q02",
+      "type": "paraphrase",
+      "question": "How can I make Python error tracebacks less verbose in IPython?",
+      "context_precision": 0.917,
+      "context_recall": 1.0,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q03",
+      "type": "conceptual",
+      "question": "Why can %timeit give a misleading result when timing a list sort, and what should be used instead?",
+      "context_precision": 0.75,
+      "context_recall": 1.0,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q04",
+      "type": "keyword",
+      "question": "Which package has to be installed to use the %lprun line-by-line profiler?",
+      "context_precision": 1.0,
+      "context_recall": 1.0,
+      "anchor_rank": 2
+    },
+    {
+      "id": "q05",
+      "type": "factual",
+      "question": "What are the rules of broadcasting in NumPy?",
+      "context_precision": 0.7,
+      "context_recall": 1.0,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q06",
+      "type": "factual",
+      "question": "What does np.argsort return?",
+      "context_precision": 1.0,
+      "context_recall": 1.0,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q07",
+      "type": "keyword",
+      "question": "How can I increment array positions given repeated indices, since x[i] += 1 does not accumulate?",
+      "context_precision": 1.0,
+      "context_recall": 1.0,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q08",
+      "type": "factual",
+      "question": "What is the difference between loc and iloc in Pandas?",
+      "context_precision": 1.0,
+      "context_recall": 1.0,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q09",
+      "type": "factual",
+      "question": "What is a many-to-one join in pd.merge?",
+      "context_precision": 0.867,
+      "context_recall": 1.0,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q10",
+      "type": "keyword",
+      "question": "How do I deal with overlapping column names when merging two DataFrames?",
+      "context_precision": 0.756,
+      "context_recall": 1.0,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q11",
+      "type": "conceptual",
+      "question": "What does split-apply-combine mean in a Pandas groupby operation?",
+      "context_precision": 1.0,
+      "context_recall": 1.0,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q12",
+      "type": "conceptual",
+      "question": "When is it worth using eval() or query() in Pandas?",
+      "context_precision": 1.0,
+      "context_recall": 1.0,
+      "anchor_rank": null
+    },
+    {
+      "id": "q13",
+      "type": "conceptual",
+      "question": "How do resample() and asfreq() differ in Pandas time series?",
+      "context_precision": 1.0,
+      "context_recall": 1.0,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q14",
+      "type": "factual",
+      "question": "What are the two interfaces Matplotlib provides?",
+      "context_precision": null,
+      "context_recall": null,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q15",
+      "type": "keyword",
+      "question": "How do I save a Matplotlib figure as a PNG file?",
+      "context_precision": null,
+      "context_recall": null,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q16",
+      "type": "factual",
+      "question": "What are the steps of the typical Scikit-Learn estimator API workflow?",
+      "context_precision": null,
+      "context_recall": null,
+      "anchor_rank": 2
+    },
+    {
+      "id": "q17",
+      "type": "conceptual",
+      "question": "What does it mean for a model to underfit versus overfit the data?",
+      "context_precision": null,
+      "context_recall": null,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q18",
+      "type": "paraphrase",
+      "question": "How should categorical features such as neighborhood names be encoded for a model?",
+      "context_precision": null,
+      "context_recall": null,
+      "anchor_rank": 2
+    },
+    {
+      "id": "q19",
+      "type": "keyword",
+      "question": "What is TF-IDF and how is it computed in Scikit-Learn?",
+      "context_precision": null,
+      "context_recall": null,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q20",
+      "type": "factual",
+      "question": "What are the advantages of naive Bayes classifiers?",
+      "context_precision": null,
+      "context_recall": null,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q21",
+      "type": "conceptual",
+      "question": "What is the kernel trick in support vector machines?",
+      "context_precision": null,
+      "context_recall": null,
+      "anchor_rank": 4
+    },
+    {
+      "id": "q22",
+      "type": "paraphrase",
+      "question": "How can principal component analysis be used to clean up noisy data?",
+      "context_precision": null,
+      "context_recall": null,
+      "anchor_rank": 3
+    },
+    {
+      "id": "q23",
+      "type": "factual",
+      "question": "How does the k-means algorithm work?",
+      "context_precision": null,
+      "context_recall": null,
+      "anchor_rank": 2
+    },
+    {
+      "id": "q24",
+      "type": "conceptual",
+      "question": "Why might Gaussian mixture models be preferred over k-means?",
+      "context_precision": null,
+      "context_recall": null,
+      "anchor_rank": 4
+    },
+    {
+      "id": "q25",
+      "type": "keyword",
+      "question": "What does the bandwidth parameter control in kernel density estimation?",
+      "context_precision": null,
+      "context_recall": null,
+      "anchor_rank": 2
+    },
+    {
+      "id": "q26",
+      "type": "multi_chunk",
+      "question": "What steps are involved in computing HOG features for images?",
+      "context_precision": null,
+      "context_recall": null,
+      "anchor_rank": 5
+    },
+    {
+      "id": "q27",
+      "type": "conceptual",
+      "question": "How is bagging related to random forests?",
+      "context_precision": null,
+      "context_recall": null,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q28",
+      "type": "paraphrase",
+      "question": "What three skill areas does the author say data science combines?",
+      "context_precision": null,
+      "context_recall": null,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q29",
+      "type": "factual",
+      "question": "Does the book use Python 2 or Python 3 syntax?",
+      "context_precision": null,
+      "context_recall": null,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q30",
+      "type": "factual",
+      "question": "Which Python library is described as handling heterogeneous and labeled data?",
+      "context_precision": null,
+      "context_recall": null,
+      "anchor_rank": 1
+    },
+    {
+      "id": "q31",
+      "type": "multi_chunk",
+      "question": "What are the weaknesses of k-means that motivate Gaussian mixture models, and how do GMMs generalize the E-M algorithm?",
+      "context_precision": null,
+      "context_recall": null,
+      "anchor_rank": 2
+    }
+  ]
+}

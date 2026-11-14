@@ -36,10 +36,7 @@ class RoutingDecision(BaseModel):
     tools: list[
         Literal[
             "hybrid_rag",
-            "graph_rag",
             "web_search",
-            "github_rag",
-            "direct"
         ]
     ]
     reasoning: str
