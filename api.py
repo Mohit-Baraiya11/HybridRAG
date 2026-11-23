@@ -1,49 +1,123 @@
-from datetime import timedelta
-from datetime import timezone
-from datetime import datetime
 import os
+import re
+import time
+import uuid
+import tempfile
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+
+from dotenv import load_dotenv
+
+load_dotenv()  # must run before anything reads env vars
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, Header, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
-import tempfile
-import os
-import uuid
 from supabase import create_client
-from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage,AIMessage
-
-from graph.workflow import graph
-from tools.hybrid_rag_tool import ingest_pdf
-from fastapi.responses import FileResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_groq import ChatGroq
-from fastapi.responses import StreamingResponse
-import asyncio
-import time
-from tools.hybrid_rag_tool import warm_up  
 
-load_dotenv()
+from tools.hybrid_rag_tool import (
+    ingest_pdf,
+    warm_up,
+    retrieve_context,
+    get_index,
+    delete_session_vectors,
+    clear_session_caches,
+)
+
+# Optional: verify the JWT locally (no network call per request).
+# Needs `pip install "pyjwt[crypto]"`. If anything fails we fall back to
+# supabase.auth.get_user(), so auth keeps working either way.
+try:
+    import jwt
+    from jwt import PyJWKClient
+    _jwks_client = PyJWKClient(
+        f"{os.getenv('SUPABASE_URL')}/auth/v1/.well-known/jwks.json", cache_keys=True
+    )
+except Exception:
+    jwt = None
+    _jwks_client = None
 
 app = FastAPI()
 
 supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 admin_db = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_ROLE_KEY"))
 
-import re
+llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0.2)
+title_llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0, reasoning_effort="low")
+
+SYSTEM_PROMPT = """You answer questions ONLY from the user's uploaded documents.
+
+Rules:
+1. Use only the numbered passages below. Never use outside knowledge, even if you know the answer.
+2. After each statement that comes from a passage, add its number in square brackets, like [2].
+   Cite only passages you actually used. Do not write file names or page numbers yourself
+   (the app shows them) and do not use square brackets for anything else.
+3. If the passages do not contain the answer, say: "I couldn't find that in your documents."
+   You may add one short sentence about what the user could ask instead. Do NOT answer the
+   question from your own knowledge, even if it is easy or well known.
+4. For greetings or small talk ("hi", "thanks"), reply briefly and say you can answer
+   questions about their uploaded documents. Questions about this chat itself
+   ("what did I ask before?") may be answered from the conversation.
+
+Passages:
+{context}"""
+
+NO_CONTEXT = "(No relevant passages were found. The documents may not be uploaded or indexed yet.)"
+
+
+def build_context(chunks: list[dict]) -> str:
+    if not chunks:
+        return NO_CONTEXT
+    return "\n\n".join(f"[{i}]\n{c['text']}" for i, c in enumerate(chunks, 1))
+
+
+def process_answer(answer: str, chunks: list[dict]):
+    """Remove citation markers that don't match a passage, and return every
+    retrieved passage (with its page) flagged by whether the answer cited it."""
+    cited = set()
+
+    def keep(m):
+        n = int(m.group(1))
+        if 1 <= n <= len(chunks):
+            cited.add(n)
+            return m.group(0)
+        return ""
+
+    cleaned = re.sub(r"\[(\d{1,2})\]", keep, answer)
+
+    # A refusal with nothing cited shouldn't be dressed up with unrelated passages
+    if not cited and "couldn't find" in cleaned.lower():
+        return cleaned, []
+
+    sources = [
+        {"n": i, "source": c["source"], "page": c["page"], "text": c["text"], "cited": i in cited}
+        for i, c in enumerate(chunks, 1)
+    ]
+    return cleaned, sources
+
+
+def strip_citations(text: str) -> str:
+    """Old [n] markers point at passages from earlier turns; don't feed them back."""
+    return re.sub(r"\s?\[\d{1,2}\]", "", text)
+
 
 @app.on_event("startup")
 def _startup():
     warm_up()
-    
+
+
 @app.middleware("http")
 async def normalize_path_middleware(request, call_next):
     if "//" in request.scope["path"]:
-        request.scope["path"] = re.sub(r'/+', '/', request.scope["path"])
+        request.scope["path"] = re.sub(r"/+", "/", request.scope["path"])
     return await call_next(request)
+
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*","null"],  # tighten this after testing
+    allow_origins=["*", "null"],  # tighten this after testing
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,18 +126,33 @@ app.add_middleware(
 
 # ── Auth & Database Client Helper ─────────────────────────────────────────────
 
-async def get_user_db(authorization: str = Header(...)):
+def _verify_locally(token: str):
+    """Returns a user-like object, or None if local verification isn't possible."""
+    if jwt is None or _jwks_client is None:
+        return None
+    try:
+        key = _jwks_client.get_signing_key_from_jwt(token).key
+        payload = jwt.decode(
+            token, key, algorithms=["ES256", "RS256"], audience="authenticated"
+        )
+        return SimpleNamespace(id=payload["sub"])
+    except Exception:
+        return None
+
+
+def get_user_db(authorization: str = Header(...)):
     try:
         token = authorization.replace("Bearer ", "").strip()
         if not token or token == "undefined":
             raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-        user_resp = supabase.auth.get_user(token)
-        user = user_resp.user
+        user = _verify_locally(token)
+        if user is None:  # fallback: ask Supabase
+            user = supabase.auth.get_user(token).user
         if not user:
             raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-        # Create user-authenticated client for PostgREST calls to pass RLS checks
+        # User-authenticated client so PostgREST calls pass RLS checks
         db = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
         db.postgrest.auth(token)
         return user, token, db
@@ -80,15 +169,24 @@ class ChatRequest(BaseModel):
     message: str
     session_id: str
 
+
 class SessionCreate(BaseModel):
     title: str = "New Chat"
 
 
-# ── Background ingestion ──────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _owns_session(db, user_id: str, session_id: str) -> bool:
+    res = db.table("sessions").select("id") \
+        .eq("id", session_id).eq("user_id", user_id).execute()
+    return bool(res.data)
+
+
+# ── Background jobs ───────────────────────────────────────────────────────────
 
 def run_ingestion(tmp_path: str, user_id: str, session_id: str, filename: str, token: str = None):
     try:
-        ingest_pdf(tmp_path, user_id=user_id, session_id=session_id)
+        ingest_pdf(tmp_path, user_id=user_id, session_id=session_id, filename=filename)
         print(f"Background ingestion complete: {filename}")
 
         db = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
@@ -109,10 +207,38 @@ def run_ingestion(tmp_path: str, user_id: str, session_id: str, filename: str, t
             print(f"Temp file deleted: {tmp_path}")
 
 
+def post_chat_tasks(user_id: str, session_id: str, first_message: str,
+                    is_first: bool, tokens: int, latency: float):
+    """Everything that doesn't need to block the answer: title, session stats, latency log."""
+    try:
+        update = {"updated_at": "now()", "last_latency": latency}
+
+        if is_first:
+            title = title_llm.invoke(
+                f"Summarize this message into a short 3-5 word chat title:\n\n{first_message}"
+            ).content.strip()
+            update["title"] = title
+
+        cur = admin_db.table("sessions").select("total_tokens").eq("id", session_id).execute()
+        current_tokens = (cur.data[0].get("total_tokens") or 0) if cur.data else 0
+        update["total_tokens"] = current_tokens + tokens
+
+        admin_db.table("sessions").update(update).eq("id", session_id).execute()
+
+        admin_db.table("latency_logs").insert({
+            "user_id": user_id,
+            "session_id": session_id,
+            "latency_seconds": latency,
+            "tokens_used": tokens,
+        }).execute()
+    except Exception as e:
+        print(f"post_chat_tasks failed: {e}")
+
+
 # ── Session Endpoints ─────────────────────────────────────────────────────────
 
 @app.post("/sessions")
-async def create_session(body: SessionCreate, auth=Depends(get_user_db)):
+def create_session(body: SessionCreate, auth=Depends(get_user_db)):
     user, token, db = auth
     session_id = str(uuid.uuid4())
     db.table("sessions").insert({
@@ -124,7 +250,7 @@ async def create_session(body: SessionCreate, auth=Depends(get_user_db)):
 
 
 @app.get("/sessions")
-async def get_sessions(auth=Depends(get_user_db)):
+def get_sessions(auth=Depends(get_user_db)):
     user, token, db = auth
     result = db.table("sessions") \
         .select("id, title, created_at, updated_at") \
@@ -135,48 +261,35 @@ async def get_sessions(auth=Depends(get_user_db)):
 
 
 @app.delete("/sessions/{session_id}")
-async def delete_session(session_id: str, auth=Depends(get_user_db)):
+def delete_session(session_id: str, auth=Depends(get_user_db)):
     user, token, db = auth
-    # Verify session belongs to user
-    session = db.table("sessions") \
-        .select("id") \
-        .eq("id", session_id) \
-        .eq("user_id", user.id) \
-        .execute()
-
-    if not session.data:
+    if not _owns_session(db, user.id, session_id):
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Delete session — messages cascade automatically
-    db.table("sessions").delete().eq("id", session_id).execute()
+    # Vectors + side tables first. Service role is used for the tables that are
+    # written with the service role, because RLS can make user-client deletes
+    # silently remove 0 rows.
+    delete_session_vectors(session_id)
+    admin_db.table("bm25_store").delete().eq("id", f"{user.id}_{session_id}").execute()
+    admin_db.table("parent_store").delete().eq("session_id", session_id).execute()
+    admin_db.table("documents").delete().eq("session_id", session_id).execute()
+    admin_db.table("messages").delete().eq("session_id", session_id).execute()
+    admin_db.table("sessions").delete().eq("id", session_id).eq("user_id", user.id).execute()
 
-    # Clean up related data
-    db.table("messages").delete().eq("session_id", session_id).execute()
-    db.table("bm25_store").delete().eq("id", f"{user.id}_{session_id}").execute()
-    db.table("parent_store").delete().eq("session_id", session_id).execute()
-    db.table("graph_store").delete().eq("id", f"{user.id}_{session_id}").execute()
-    db.table("documents").delete().eq("session_id", session_id).execute()
-
+    clear_session_caches(user.id, session_id)
     return {"status": "deleted", "session_id": session_id}
 
 
 # ── Message Endpoints ─────────────────────────────────────────────────────────
 
 @app.get("/sessions/{session_id}/messages")
-async def get_messages(session_id: str, auth=Depends(get_user_db)):
+def get_messages(session_id: str, auth=Depends(get_user_db)):
     user, token, db = auth
-    # Verify session belongs to user
-    session = db.table("sessions") \
-        .select("id") \
-        .eq("id", session_id) \
-        .eq("user_id", user.id) \
-        .execute()
-
-    if not session.data:
+    if not _owns_session(db, user.id, session_id):
         raise HTTPException(status_code=404, detail="Session not found")
 
     result = db.table("messages") \
-        .select("role, content, created_at") \
+        .select("role, content, sources, created_at") \
         .eq("session_id", session_id) \
         .order("created_at") \
         .execute()
@@ -187,208 +300,145 @@ async def get_messages(session_id: str, auth=Depends(get_user_db)):
 # ── Upload Endpoint ───────────────────────────────────────────────────────────
 
 @app.post("/upload/{session_id}")
-async def upload_pdf(
+def upload_pdf(
     session_id: str,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    auth=Depends(get_user_db)
+    auth=Depends(get_user_db),
 ):
     user, token, db = auth
-    if not file.filename.endswith(".pdf"):
+    if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files allowed")
 
-    # Verify session belongs to user
-    session = db.table("sessions") \
-        .select("id") \
-        .eq("id", session_id) \
-        .eq("user_id", user.id) \
-        .execute()
-
-    if not session.data:
+    if not _owns_session(db, user.id, session_id):
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Save to temp file
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        content = await file.read()
-        tmp.write(content)
+        tmp.write(file.file.read())
         tmp_path = tmp.name
 
-    # Run ingestion in background
     background_tasks.add_task(
         run_ingestion,
         tmp_path=tmp_path,
         user_id=user.id,
         session_id=session_id,
         filename=file.filename,
-        token=token
+        token=token,
     )
 
     return {
         "status": "processing",
         "filename": file.filename,
-        "message": "PDF uploaded. Ingestion running in background."
+        "message": "PDF uploaded. Ingestion running in background.",
     }
 
 
 # ── Chat Endpoint ─────────────────────────────────────────────────────────────
+# Plain `def` on purpose: FastAPI runs it in a threadpool, so the blocking
+# Supabase / Pinecone / Groq calls don't freeze the event loop for other users.
 
 @app.post("/chat")
-async def chat(request: ChatRequest, auth=Depends(get_user_db)):
+def chat(request: ChatRequest, background_tasks: BackgroundTasks, auth=Depends(get_user_db)):
     user, token, db = auth
+    t0 = time.time()
 
-    # Verify session belongs to user
-    session = db.table("sessions") \
-        .select("id") \
-        .eq("id", request.session_id) \
-        .eq("user_id", user.id) \
-        .execute()
-
-    if not session.data:
+    if not _owns_session(db, user.id, request.session_id):
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Check if first message
-    msg_count = db.table("messages") \
-        .select("id", count="exact") \
-        .eq("session_id", request.session_id) \
-        .execute()
-    is_first_message = msg_count.count == 0
-
-    # Fetch last messages (newest first, then reversed to chronological)
+    # Recent history (newest first -> chronological). Empty means first message.
     history = db.table("messages") \
         .select("role, content") \
         .eq("session_id", request.session_id) \
         .order("created_at", desc=True) \
-        .limit(7) \
-        .execute()
+        .limit(6) \
+        .execute().data
+    is_first = len(history) == 0
 
-    messages = []
-    for msg in reversed(history.data):
-        if msg["role"] == "user":
-            messages.append(HumanMessage(content=msg["content"]))
-        else:
-            messages.append(AIMessage(content=msg["content"]))
+    past = [
+        HumanMessage(content=m["content"]) if m["role"] == "user"
+        else AIMessage(content=strip_citations(m["content"]))
+        for m in reversed(history)
+    ]
 
-    # Save user message
     db.table("messages").insert({
         "session_id": request.session_id,
         "user_id": user.id,
         "role": "user",
-        "content": request.message
+        "content": request.message,
     }).execute()
 
-    messages.append(HumanMessage(content=request.message))
+    # Retrieve -> single LLM call
+    chunks = retrieve_context(request.message, user.id, request.session_id)
 
-    # Uploaded documents for this session
-    docs = db.table("documents") \
-        .select("filename") \
-        .eq("session_id", request.session_id) \
-        .execute()
-    print("session:", request.session_id, "| docs rows:", docs.data)  # remove once documents insert is fixed
-    pdf_paths = [d["filename"] for d in docs.data]
+    with_context = [
+        SystemMessage(content=SYSTEM_PROMPT.format(context=build_context(chunks))),
+        *past,
+        HumanMessage(content=request.message),
+    ]
+    resp = llm.invoke(with_context)
+    answer, sources = process_answer(resp.content or "I couldn't generate an answer.", chunks)
+    tokens = (getattr(resp, "usage_metadata", None) or {}).get("total_tokens", 0)
 
-    graph_start = time.time()
-    result = graph.invoke({
-        "messages": messages,
-        "retrieved_context": [],
-        "user_id": user.id,
-        "session_id": request.session_id,
-        "verification_attempts": 0,
-        "loop_decision": "",
-        "routing_decision": {},
-        "final_answer": "",
-        "total_tokens": 0,
-        "pdf_paths": pdf_paths
-    })
-    graph_latency = round(time.time() - graph_start, 2)
-    print(f"Graph latency: {graph_latency}s")
-
-    answer = result.get("synthesizer_result", "I couldn't generate an answer.")
-    tokens = result.get("total_tokens", 0)
-
-    # Log latency once (never let logging break chat)
-    try:
-        routing = result.get("routing_decision") or {}
-        routed_tools = routing.get("tools", []) if isinstance(routing, dict) else []
-        admin_db.table("latency_logs").insert({
-            "user_id": user.id,
-            "session_id": request.session_id,
-            "latency_seconds": graph_latency,
-            "routed_tools": routed_tools,
-            "tokens_used": tokens,
-        }).execute()
-    except Exception as e:
-        print(f"Latency log failed: {e}")
-
-    # Save assistant message
     db.table("messages").insert({
         "session_id": request.session_id,
         "user_id": user.id,
         "role": "assistant",
         "content": answer,
+        "sources": sources,
     }).execute()
 
-    # Generate title on first message only (fast non-reasoning model)
-    if is_first_message:
-        title_llm = ChatGroq(model="openai/gpt-oss-20b", temperature=0, reasoning_effort="low")
-        title_result = title_llm.invoke(
-            f"Summarize this message into a short 3-5 word chat title:\n\n{request.message}"
-        )
-        title = title_result.content.strip()
-        db.table("sessions").update({
-            "title": title,
-            "updated_at": "now()",
-            "total_tokens": tokens,
-            "last_latency": graph_latency
-        }).eq("id", request.session_id).execute()
-    else:
-        current = db.table("sessions") \
-            .select("total_tokens") \
-            .eq("id", request.session_id) \
-            .execute()
-        current_tokens = current.data[0].get("total_tokens", 0) or 0
-        db.table("sessions").update({
-            "updated_at": "now()",
-            "total_tokens": current_tokens + tokens,
-            "last_latency": graph_latency
-        }).eq("id", request.session_id).execute()
+    latency = round(time.time() - t0, 2)
+    print(f"Chat latency: {latency}s")
 
-    return {"answer": answer, "session_id": request.session_id, "tokens_used": tokens}
+    background_tasks.add_task(
+        post_chat_tasks, user.id, request.session_id, request.message, is_first, tokens, latency
+    )
+
+    return {"answer": answer, "sources": sources, "session_id": request.session_id, "tokens_used": tokens}
 
 
 # ── Health Check ──────────────────────────────────────────────────────────────
 
 @app.get("/health")
-async def health():
+def health():
     return {"status": "ok"}
 
 
 @app.get("/api-status")
-async def check():
+def check():
     return {"message": "API is running......"}
 
 
 @app.get("/")
-async def serve_ui():
-    """Serve the frontend UI so it runs on the same origin as the API,
-    avoiding browser blocks on fetch() from file:// pages."""
+def serve_ui():
+    """Serve the frontend UI from the same origin as the API."""
     return FileResponse("index.html")
 
+
+# ── Latency metrics ───────────────────────────────────────────────────────────
 
 def _pct(vals, p):
     if not vals:
         return None
     s = sorted(vals)
     k = (len(s) - 1) * p / 100
-    f = int(k); c = min(f + 1, len(s) - 1)
+    f = int(k)
+    c = min(f + 1, len(s) - 1)
     return round(s[f] + (s[c] - s[f]) * (k - f), 2)
+
 
 def _summary(rows):
     v = [float(r["latency_seconds"]) for r in rows if r.get("latency_seconds") is not None]
-    return {"count": len(v), "p50": _pct(v, 50), "p95": _pct(v, 95),
-            "mean": round(sum(v) / len(v), 2) if v else None}
+    return {
+        "count": len(v),
+        "p50": _pct(v, 50),
+        "p95": _pct(v, 95),
+        "mean": round(sum(v) / len(v), 2) if v else None,
+    }
+
 
 @app.get("/metrics/latency")
-async def latency_metrics(days: int = 14, auth=Depends(get_user_db)):
+def latency_metrics(days: int = 14, auth=Depends(get_user_db)):
     user, token, db = auth
     days = max(1, min(days, 90))
     since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()

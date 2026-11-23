@@ -1,12 +1,12 @@
 from pathlib import Path
 from contextlib import contextmanager
 import uuid
-import json as json
+import json
 import time
+import os
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-import os
 from pinecone import Pinecone, ServerlessSpec
 from dotenv import load_dotenv
 from supabase import create_client
@@ -16,17 +16,20 @@ load_dotenv()
 
 pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
 supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_ROLE_KEY"))
-bm25 = BM25Encoder()   # only used during ingestion (train + encode_documents)
-
-# in-memory parent store, only used while ingesting a PDF
-parent_store = {}
 
 # ── Runtime config + caches (query path) ──────────────────────────────────────
 USE_RERANK = os.getenv("USE_RERANK", "true").lower() == "true"
+# Reranker scores below this mean "not about the user's documents". Tune it using
+# the scores printed in the server log (see retrieve_context).
+MIN_RELEVANCE = float(os.getenv("MIN_RELEVANCE", "0.1"))
 
 _index = None
 _bm25_cache = {}     # bm25_id -> BM25Encoder
 _parent_cache = {}   # (user_id, session_id) -> {parent_id: text}
+
+# Splitters are stateless, so they are safe to share across threads
+parent_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
+child_splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=50)
 
 
 @contextmanager
@@ -74,6 +77,21 @@ def get_parents(user_id: str, session_id: str) -> dict:
     return parents
 
 
+def clear_session_caches(user_id: str, session_id: str):
+    """Drop cached BM25 + parents for a session (after ingest or delete)."""
+    _bm25_cache.pop(f"{user_id}_{session_id}", None)
+    _parent_cache.pop((user_id, session_id), None)
+
+
+def delete_session_vectors(session_id: str):
+    """Remove every vector in the session's Pinecone namespace."""
+    try:
+        get_index().delete(delete_all=True, namespace=session_id)
+    except Exception as e:
+        # Deleting a namespace that doesn't exist raises; safe to ignore
+        print(f"pinecone namespace cleanup skipped: {e}")
+
+
 def warm_up():
     """Call once at server startup so the first real request isn't slow."""
     try:
@@ -88,27 +106,19 @@ def warm_up():
 # ── Loading + chunking ────────────────────────────────────────────────────────
 
 def load_pdf(pdf_path):
-    loader = PyPDFLoader(pdf_path)
-    return loader.load()
-
-
+    return PyPDFLoader(pdf_path).load()
 
 
 def chunk_document(docs, document_id):
-    parent_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=2000,
-        chunk_overlap=200
-    )
-    child_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=400,
-        chunk_overlap=50
-    )
-    parent_chunks = parent_splitter.split_documents(docs)
+    """Returns (child_chunks, parents). `parents` is local to this call,
+    so concurrent ingestions can't mix up each other's parent chunks."""
+    parents = {}
     all_child_chunks = []
 
+    parent_chunks = parent_splitter.split_documents(docs)
     for p_idx, parent_chunk in enumerate(parent_chunks):
         parent_id = f"{document_id}_p{p_idx}"
-        parent_store[parent_id] = parent_chunk.page_content  # fill in-memory store
+        parents[parent_id] = parent_chunk.page_content
 
         children = child_splitter.split_documents([parent_chunk])
         for c_idx, child in enumerate(children):
@@ -117,93 +127,54 @@ def chunk_document(docs, document_id):
             child.metadata["document_id"] = document_id
             all_child_chunks.append(child)
 
-    return all_child_chunks
+    return all_child_chunks, parents
 
 
-# ── Parent Store Supabase ─────────────────────────────────────────────────────
+# ── Parent Store (Supabase) ───────────────────────────────────────────────────
 
-def save_parent_store_to_supabase(user_id: str, session_id: str, source: str):
-    """Save current in-memory parent_store to Supabase."""
+def save_parents_to_supabase(parents: dict, user_id: str, session_id: str, source: str):
     rows = [
         {
             "id": pid,
             "content": text,
             "user_id": user_id,
             "session_id": session_id,
-            "source": source
+            "source": source,
         }
-        for pid, text in parent_store.items()
+        for pid, text in parents.items()
     ]
     if rows:
         supabase.table("parent_store").upsert(rows).execute()
         print(f"Parent store saved: {len(rows)} parents")
 
 
-def load_parent_store_from_supabase(user_id: str, session_id: str):
-    """Legacy loader (kept in case other modules import it). Query path uses get_parents()."""
-    global parent_store
+def get_existing_child_texts(user_id: str, session_id: str) -> list[str]:
+    """Rebuild the session's existing child-chunk texts from stored parents.
+    The child splitter is deterministic, so this matches what was indexed, and
+    it has no 1000-chunk cap like querying Pinecone with a zero vector did.
+    Reads straight from Supabase (not the cache) so it is never stale."""
     result = supabase.table("parent_store") \
-        .select("id, content") \
+        .select("content") \
         .eq("user_id", user_id) \
         .eq("session_id", session_id) \
         .execute()
-
-    if result.data:
-        parent_store = {row["id"]: row["content"] for row in result.data}
-        print(f"Parent store loaded: {len(parent_store)} parents")
-    else:
-        print("No parent store found in Supabase.")
+    texts = []
+    for row in result.data:
+        texts.extend(child_splitter.split_text(row["content"]))
+    return texts
 
 
 # ── BM25 ──────────────────────────────────────────────────────────────────────
 
-def train_and_save_bm25(texts: list[str], user_id: str = "default"):
-    global bm25
-    bm25.fit(texts)
-    params = bm25.get_params()
+def train_and_save_bm25(texts: list[str], bm25_id: str) -> BM25Encoder:
+    enc = BM25Encoder()
+    enc.fit(texts)
     supabase.table("bm25_store").upsert({
-        "id": user_id,
-        "params": json.dumps(params)
+        "id": bm25_id,
+        "params": json.dumps(enc.get_params()),
     }).execute()
-    print(f"BM25 saved for user: {user_id}")
-
-
-def load_bm25_from_supabase(user_id="default"):
-    """Legacy loader (kept in case other modules import it). Query path uses get_bm25()."""
-    global bm25
-    result = supabase.table("bm25_store") \
-        .select("params") \
-        .eq("id", user_id) \
-        .execute()
-
-    if result.data:
-        params = json.loads(result.data[0]["params"])
-        bm25 = BM25Encoder()
-        bm25.set_params(**params)
-        print(f"BM25 loaded for user: {user_id}")
-        return True
-
-    print("No BM25 params found.")
-    return False
-
-
-def get_session_texts_from_pinecone(session_id: str) -> list:
-    index = get_index()
-    all_texts = []
-
-    results = index.query(
-        vector=[0.0] * 1024,
-        top_k=1000,
-        include_metadata=True,
-        namespace=session_id,
-    )
-
-    for match in results["matches"]:
-        text = match["metadata"].get("text", "")
-        if text:
-            all_texts.append(text)
-
-    return all_texts
+    print(f"BM25 saved for: {bm25_id}")
+    return enc
 
 
 # ── Embeddings ────────────────────────────────────────────────────────────────
@@ -243,15 +214,15 @@ def create_index_if_not_exists():
             name=index_name,
             dimension=1024,
             metric="dotproduct",
-            spec=ServerlessSpec(cloud="aws", region="us-east-1")
+            spec=ServerlessSpec(cloud="aws", region="us-east-1"),
         )
     return pc.Index(index_name)
 
 
-def pinecone_store(chunks, embeddings, session_id: str = "default"):
+def pinecone_store(chunks, embeddings, bm25_enc: BM25Encoder, session_id: str = "default"):
     index = get_index()
     texts = [chunk.page_content for chunk in chunks]
-    sparse_embeddings = bm25.encode_documents(texts)
+    sparse_embeddings = bm25_enc.encode_documents(texts)
     vectors = []
     for chunk, dense_emb, sparse_emb in zip(chunks, embeddings, sparse_embeddings):
         vectors.append({
@@ -265,8 +236,8 @@ def pinecone_store(chunks, embeddings, session_id: str = "default"):
                 "parent_id": chunk.metadata["parent_id"],
                 "source": chunk.metadata["source"],
                 "page": chunk.metadata.get("page", 0),
-                "text": chunk.page_content
-            }
+                "text": chunk.page_content,
+            },
         })
     for i in range(0, len(vectors), 100):
         index.upsert(vectors=vectors[i:i + 100], namespace=session_id)
@@ -294,7 +265,7 @@ def retrive(query, bm25_enc, parents, top_k=5, alpha=0.5, source_filter=None, se
     scaled_dense = [v * alpha for v in dense_vector]
     scaled_sparse = {
         "indices": sparse_vector["indices"],
-        "values": [v * (1 - alpha) for v in sparse_vector["values"]]
+        "values": [v * (1 - alpha) for v in sparse_vector["values"]],
     }
 
     query_kwargs = {
@@ -302,15 +273,16 @@ def retrive(query, bm25_enc, parents, top_k=5, alpha=0.5, source_filter=None, se
         "sparse_vector": scaled_sparse,
         "top_k": 30 if USE_RERANK else top_k,
         "include_metadata": True,
-        "namespace": session_id,          # isolates this session's vectors
+        "namespace": session_id,  # isolates this session's vectors
     }
     if source_filter:
         query_kwargs["filter"] = {"source": {"$eq": source_filter}}
 
-    index = get_index()                   # outside the timer on purpose
+    index = get_index()  # outside the timer on purpose
     with timer("pinecone query"):
         results = index.query(**query_kwargs)
     matches = results["matches"]
+    ranked = [(m, None) for m in matches]   # (match, rerank_score)
 
     if matches and USE_RERANK:
         with timer("rerank"):
@@ -319,17 +291,24 @@ def retrive(query, bm25_enc, parents, top_k=5, alpha=0.5, source_filter=None, se
                 query=query,
                 documents=[m["metadata"]["text"] for m in matches],
                 top_n=min(len(matches), top_k * 3),
-                return_documents=True
+                return_documents=True,
             )
-        matches = [matches[r["index"]] for r in reranked.data]
+        ranked = [(matches[r["index"]], r["score"]) for r in reranked.data]
 
     contexts = []
     seen_parents = set()
-    for match in matches:
+    for match, score in ranked:
         parent_id = match["metadata"].get("parent_id")
         if parent_id and parent_id not in seen_parents:
             parent_text = parents.get(parent_id, match["metadata"].get("text", ""))
-            contexts.append(parent_text)
+            # Parents are split per PDF page, so the matched child's page is the
+            # parent's page. PyPDFLoader pages are 0-based -> +1 for display.
+            contexts.append({
+                "text": parent_text,
+                "source": match["metadata"].get("source"),
+                "page": int(match["metadata"].get("page", 0)) + 1,
+                "score": score,
+            })
             seen_parents.add(parent_id)
             if len(contexts) >= top_k:
                 break
@@ -337,21 +316,37 @@ def retrive(query, bm25_enc, parents, top_k=5, alpha=0.5, source_filter=None, se
     return contexts
 
 
+def retrieve_context(query: str, user_id: str, session_id: str, top_k: int = 5) -> list[dict]:
+    """Query -> parent chunks as [{text, source, page}], best first."""
+    t0 = time.time()
+    with timer("bm25 + parents"):
+        bm25_enc = get_bm25(f"{user_id}_{session_id}")
+        parents = get_parents(user_id, session_id)
+
+    if bm25_enc is None:
+        return []
+
+    context = retrive(query, bm25_enc, parents, top_k=top_k, alpha=0.5, session_id=session_id)
+
+    # Vector search ALWAYS returns its nearest chunks, even for an unrelated
+    # question. The reranker score is what tells us they are actually relevant.
+    if USE_RERANK:
+        print("   relevance scores:", [round(c["score"], 3) for c in context if c["score"] is not None])
+        context = [c for c in context if c["score"] is None or c["score"] >= MIN_RELEVANCE]
+    print(f"⏱  [retrieve] done in {round(time.time() - t0, 2)}s — {len(context)} chunks")
+    return context
+
+
 # ── Ingestion ─────────────────────────────────────────────────────────────────
 
-def ingest_pdf(pdf_path: str, user_id: str, session_id: str):
-
-    filename = Path(pdf_path).name
+def ingest_pdf(pdf_path: str, user_id: str, session_id: str, filename: str | None = None):
+    # pdf_path is a temp file, so the real name is passed in from the API.
+    filename = filename or Path(pdf_path).name
     bm25_id = f"{user_id}_{session_id}"
 
-    # Skip if already indexed
     if is_document_already_indexed(filename, session_id=session_id):
         print(f"'{filename}' already indexed, skipping.")
         return
-
-    # Fresh parent_store for this ingestion, so parents from another
-    # session/user never get upserted under this one
-    parent_store.clear()
 
     docs = load_pdf(pdf_path)
     for d in docs:
@@ -362,53 +357,19 @@ def ingest_pdf(pdf_path: str, user_id: str, session_id: str):
         doc.metadata["document_id"] = document_id
         doc.metadata["source"] = filename
 
-    child_chunks = chunk_document(docs, document_id)
-    existing_texts = get_session_texts_from_pinecone(session_id)
+    child_chunks, parents = chunk_document(docs, document_id)
+
+    # Existing texts must be read BEFORE the new parents are saved
+    existing_texts = get_existing_child_texts(user_id, session_id)
     new_texts = [chunk.page_content for chunk in child_chunks]
-    all_texts = existing_texts + new_texts
 
-    save_parent_store_to_supabase(user_id, session_id, filename)
-    train_and_save_bm25(all_texts, user_id=bm25_id)
+    save_parents_to_supabase(parents, user_id, session_id, filename)
+    bm25_enc = train_and_save_bm25(existing_texts + new_texts, bm25_id)
 
-    texts = [chunk.page_content for chunk in child_chunks]
-    dense_embedding = embedding_text(texts)
-    pinecone_store(child_chunks, dense_embedding, session_id=session_id)
+    dense_embeddings = embedding_text(new_texts)
+    pinecone_store(child_chunks, dense_embeddings, bm25_enc, session_id=session_id)
 
     # Invalidate query-side caches so the next question sees the new document
-    _bm25_cache.pop(bm25_id, None)
-    _parent_cache.pop((user_id, session_id), None)
+    clear_session_caches(user_id, session_id)
 
     print(f"Ingestion complete for {filename}")
-
-
-# ── LangGraph node ────────────────────────────────────────────────────────────
-
-def hybrid_rag_node(state):
-    user_query = state["messages"][-1].content
-    user_id = state.get("user_id", "default")
-    session_id = state.get("session_id", "default")
-
-    t0 = time.time()
-    with timer("bm25 + parents"):
-        bm25_enc = get_bm25(f"{user_id}_{session_id}")
-        parents = get_parents(user_id, session_id)
-
-    if bm25_enc is None:
-        context = []
-    else:
-        context = retrive(
-            user_query,
-            bm25_enc,
-            parents,
-            top_k=5,
-            alpha=0.5,
-            source_filter=None,
-            session_id=session_id,
-        )
-
-    print(f"⏱  [hybrid_rag] done in {round(time.time() - t0, 2)}s  —  {len(context)} chunks retrieved")
-
-    return {
-        "retrieved_context": context,
-        "current_context": context,
-    }
