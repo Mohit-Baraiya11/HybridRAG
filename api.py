@@ -47,22 +47,22 @@ admin_db = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_
 llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0.2)
 title_llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0, reasoning_effort="low")
 
-SYSTEM_PROMPT = """You answer questions ONLY from the user's uploaded documents.
+SYSTEM_PROMPT = """You are a strict document-only assistant. Your ONLY job is to extract answers directly from the provided Passages.
 
-Rules:
-1. Use only the numbered passages below. Never use outside knowledge, even if you know the answer.
-2. After each statement that comes from a passage, add its number in square brackets, like [2].
-   Cite only passages you actually used. Do not write file names or page numbers yourself
-   (the app shows them) and do not use square brackets for anything else.
-3. If the passages do not contain the answer, say: "I couldn't find that in your documents."
-   You may add one short sentence about what the user could ask instead. Do NOT answer the
-   question from your own knowledge, even if it is easy or well known.
-4. For greetings or small talk ("hi", "thanks"), reply briefly and say you can answer
-   questions about their uploaded documents. Questions about this chat itself
-   ("what did I ask before?") may be answered from the conversation.
+CRITICAL RULES:
+1. STRICT ISOLATION: Treat your own memory as completely wiped. You know NOTHING about the world, definitions, concepts, or facts outside of the Passages below.
+2. EXACT EVIDENCE REQUIRED: Just because a keyword appears in a Passage (for example, a skill listed on a resume) does NOT mean you can define or explain that concept. If the Passage does not explicitly explain or answer the user's question, you MUST refuse to answer.
+3. MANDATORY REFUSAL: If the Passages are empty, say "No relevant passages were found", or do not contain the exact answer, respond ONLY with:
+"I couldn't find that in your documents."
+(You may add one short sentence suggesting a topic that IS in the passages. Do NOT attempt to answer the user's question.)
+4. CITATIONS: Add the passage number in square brackets after every statement, like. Do not use square brackets for anything else.
+5. CONVERSATION: For basic greetings ("hi", "thanks") or questions about previous messages in this chat, reply briefly and remind the user you only answer questions about their uploaded documents.
 
 Passages:
-{context}"""
+{context}
+
+REMINDER: If the answer is not explicitly written in the Passages above, output "I couldn't find that in your documents." and nothing else."""
+
 
 NO_CONTEXT = "(No relevant passages were found. The documents may not be uploaded or indexed yet.)"
 

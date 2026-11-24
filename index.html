@@ -80,10 +80,10 @@ button,input,textarea{font:inherit;color:inherit}button{cursor:pointer}
 .src b{color:var(--teal);font-weight:600;flex-shrink:0}
 .src span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ctx{margin-top:10px;font-family:'Instrument Sans',system-ui,sans-serif;white-space:normal;font-size:13px}
-.ctx summary{cursor:pointer;color:var(--muted);list-style:none;display:inline-flex;align-items:center;gap:8px;padding:4px 2px;user-select:none}
+.ctx summary{cursor:pointer;color:var(--muted);list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 2px;user-select:none}
 .ctx summary::-webkit-details-marker{display:none}
-.ctx summary::before{content:"";width:6px;height:6px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .15s}
-.ctx[open] summary::before{transform:rotate(45deg)}
+.ctx summary::after{content:"";width:6px;height:6px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .15s;flex-shrink:0}
+.ctx[open] summary::after{transform:rotate(45deg)}
 .ctx summary:hover{color:var(--ink)}
 .ctxi{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:10px 12px;margin-top:8px}
 .ctxi.used{border-color:var(--teal)}
@@ -263,7 +263,7 @@ const srcRow=s=>{
   const chips='<div class="srcs">'+Object.values(g).map(x=>`<div class="src" title="${esc(x.source)}, page ${x.page}"><b>${x.ns.join(', ')}</b><span>${esc(x.source)} · page ${x.page}</span></div>`).join('')+'</div>';
   if(!s.some(x=>x.text))return chips;   // older messages were saved without the passage text
   const items=s.map(x=>`<div class="ctxi${x.cited?' used':''}"><div class="ctxh"><b>${x.n}</b><span>${esc(x.source)} · page ${x.page}</span>${x.cited?'<em>cited</em>':''}</div><div class="ctxt">${esc(x.text)}</div></div>`).join('');
-  return chips+`<details class="ctx"><summary>Retrieved context (${s.length})</summary>${items}</details>`;
+  return chips+`<details class="ctx"><summary>Show retrieved chunks (${s.length})</summary>${items}</details>`;
 };
 const when=iso=>{const d=new Date(iso),n=Date.now()-d;return n<864e5?d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):n<6048e5?d.toLocaleDateString([],{weekday:'short'}):d.toLocaleDateString([],{month:'short',day:'numeric'})};
 let tt;function toast(m,err){const t=$('toast');t.textContent=m;t.className='toast show'+(err?' error':'');clearTimeout(tt);tt=setTimeout(()=>t.className='toast',3500)}

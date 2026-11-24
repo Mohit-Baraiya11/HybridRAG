@@ -21,7 +21,6 @@ supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_
 USE_RERANK = os.getenv("USE_RERANK", "true").lower() == "true"
 # Reranker scores below this mean "not about the user's documents". Tune it using
 # the scores printed in the server log (see retrieve_context).
-MIN_RELEVANCE = float(os.getenv("MIN_RELEVANCE", "0.1"))
 
 _index = None
 _bm25_cache = {}     # bm25_id -> BM25Encoder
@@ -332,7 +331,6 @@ def retrieve_context(query: str, user_id: str, session_id: str, top_k: int = 5) 
     # question. The reranker score is what tells us they are actually relevant.
     if USE_RERANK:
         print("   relevance scores:", [round(c["score"], 3) for c in context if c["score"] is not None])
-        context = [c for c in context if c["score"] is None or c["score"] >= MIN_RELEVANCE]
     print(f"⏱  [retrieve] done in {round(time.time() - t0, 2)}s — {len(context)} chunks")
     return context
 
